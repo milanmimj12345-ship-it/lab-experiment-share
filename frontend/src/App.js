@@ -44,7 +44,7 @@ const App = () => {
       <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-8 py-4 bg-black/60 backdrop-blur-xl border-b border-white/5">
         <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('home')}>
           <div className="w-8 h-8 bg-gradient-to-br from-[#ff6b00] to-[#ff9e00] rounded-lg flex items-center justify-center font-bold text-black text-sm shadow-[0_0_15px_rgba(255,107,0,0.4)]">L</div>
-          <span className="text-lg font-extrabold tracking-tighter text-white uppercase">Lab Share <span className="text-[#ff6b00]">.</span></span>
+          <span className="text-lg font-extrabold tracking-tighter text-white uppercase">Adamvilla <span className="text-[#ff6b00]">.</span></span>
         </div>
         <div className="flex items-center gap-3">
           {view !== 'home' && (
@@ -67,9 +67,9 @@ const App = () => {
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-zinc-900 rounded-xl flex items-center justify-center font-black text-zinc-500 border border-white/5">L</div>
-            <span className="text-lg font-black tracking-tighter text-zinc-600 uppercase">Lab Share <span className="text-[#ff6b00]">.</span></span>
+            <span className="text-lg font-black tracking-tighter text-zinc-600 uppercase">Adamvilla <span className="text-[#ff6b00]">.</span></span>
           </div>
-          <p className="text-zinc-700 text-xs font-bold uppercase tracking-widest">© 2025 Lab Experiment Share. Academic Platform.</p>
+          <p className="text-zinc-700 text-xs font-bold uppercase tracking-widest">© 2025 Adamvilla. Academic Experiment Platform.</p>
         </div>
       </footer>
     </div>
