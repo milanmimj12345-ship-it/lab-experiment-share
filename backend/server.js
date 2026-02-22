@@ -23,6 +23,18 @@ app.use('/api/experiments', require('./routes/experiments'));
 app.use('/api/files', require('./routes/files'));
 app.use('/api/share', require('./routes/share'));
 
+// ✅ Chat history REST endpoint - simple and reliable
+app.get('/api/chat/history', async (req, res) => {
+  try {
+    const messages = await ChatMessage.find({ roomKey: 'lab_chat_global' })
+      .sort({ createdAt: 1 })
+      .limit(200);
+    res.json({ success: true, messages });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // Health check
 app.get('/health', (req, res) => res.json({ status: 'OK', timestamp: new Date() }));
 
@@ -33,48 +45,27 @@ mongoose.connect(process.env.MONGO_URI)
 
 // Socket.io
 const chatRooms = {};
-const ROOM_KEY = 'lab_chat_global';
 
 io.on('connection', (socket) => {
 
-  socket.on('join_room', async ({ roomKey, username }) => {
+  socket.on('join_room', ({ roomKey, username }) => {
     socket.join(roomKey);
     socket.username = username;
     socket.roomKey = roomKey;
 
-    // Track online users
     if (!chatRooms[roomKey]) chatRooms[roomKey] = [];
     chatRooms[roomKey] = chatRooms[roomKey].filter(u => u.socketId !== socket.id);
     chatRooms[roomKey].push({ socketId: socket.id, username });
     io.to(roomKey).emit('room_users', chatRooms[roomKey]);
 
-    // Send full message history to the newly joined user
-    try {
-      const history = await ChatMessage.find({ roomKey })
-        .sort({ createdAt: 1 })
-        .limit(200);
-      socket.emit('message_history', history.map(m => ({
-        id: m._id.toString(),
-        sender: m.username,
-        text: m.message || '',
-        fileUrl: m.fileUrl,
-        fileName: m.fileName,
-        type: m.messageType,
-        timestamp: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      })));
-    } catch (err) {
-      console.error('History load error:', err);
-    }
-
-    // Notify others
-    const joinMsg = {
+    // Notify others someone joined
+    socket.to(roomKey).emit('receive_message', {
       id: Date.now().toString(),
       sender: 'System',
       text: `${username} joined the room`,
       isSystem: true,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
-    socket.to(roomKey).emit('receive_message', joinMsg);
+    });
   });
 
   socket.on('send_message', async ({ roomKey, message, username }) => {
@@ -86,15 +77,14 @@ io.on('connection', (socket) => {
       type: 'text',
       timestamp
     };
-
-    // Broadcast to ALL users in room (including sender)
+    // Broadcast to ALL in room including sender
     io.to(roomKey).emit('receive_message', msg);
 
     // Save to MongoDB
     try {
       await ChatMessage.create({ roomKey, username, message, messageType: 'text' });
     } catch (err) {
-      console.error('Save message error:', err);
+      console.error('❌ Save error:', err.message);
     }
   });
 
@@ -113,7 +103,7 @@ io.on('connection', (socket) => {
     try {
       await ChatMessage.create({ roomKey, username, fileUrl, fileName, messageType: 'file' });
     } catch (err) {
-      console.error('Save file message error:', err);
+      console.error('❌ Save file error:', err.message);
     }
   });
 
@@ -122,14 +112,13 @@ io.on('connection', (socket) => {
       const user = chatRooms[roomKey].find(u => u.socketId === socket.id);
       if (user) {
         chatRooms[roomKey] = chatRooms[roomKey].filter(u => u.socketId !== socket.id);
-        const leaveMsg = {
+        io.to(roomKey).emit('receive_message', {
           id: Date.now().toString(),
           sender: 'System',
           text: `${user.username} left the room`,
           isSystem: true,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        };
-        io.to(roomKey).emit('receive_message', leaveMsg);
+        });
         io.to(roomKey).emit('room_users', chatRooms[roomKey]);
       }
     }

@@ -15,7 +15,29 @@ const ChatRoomPage = ({ navigate, chatUser }) => {
   const [loading, setLoading] = useState(true);
   const socketRef = useRef(null);
   const bottomRef = useRef(null);
+  const mountedRef = useRef(true);
 
+  // ✅ Load history via HTTP on mount - reliable
+  useEffect(() => {
+    axios.get('/api/chat/history')
+      .then(res => {
+        if (!mountedRef.current) return;
+        const history = (res.data.messages || []).map(m => ({
+          id: m._id,
+          sender: m.username,
+          text: m.message || '',
+          fileUrl: m.fileUrl,
+          fileName: m.fileName,
+          type: m.messageType,
+          timestamp: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }));
+        setMessages(history);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
+
+  // ✅ Socket for real-time only
   useEffect(() => {
     const socket = io(BACKEND, { transports: ['websocket', 'polling'] });
     socketRef.current = socket;
@@ -24,22 +46,24 @@ const ChatRoomPage = ({ navigate, chatUser }) => {
       socket.emit('join_room', { roomKey: 'lab_chat_global', username });
     });
 
-    // Load full history when joining
-    socket.on('message_history', (history) => {
-      setMessages(history);
-      setLoading(false);
-    });
-
-    // Receive new messages from server (DO NOT add locally - only here)
     socket.on('receive_message', (msg) => {
-      setMessages(prev => [...prev, msg]);
+      if (!mountedRef.current) return;
+      setMessages(prev => {
+        // Avoid duplicates by id
+        if (prev.find(m => m.id === msg.id)) return prev;
+        return [...prev, msg];
+      });
     });
 
     socket.on('room_users', (users) => {
+      if (!mountedRef.current) return;
       setOnline(Array.isArray(users) ? users.length : 1);
     });
 
-    return () => socket.disconnect();
+    return () => {
+      mountedRef.current = false;
+      socket.disconnect();
+    };
   }, [username]);
 
   useEffect(() => {
@@ -49,7 +73,6 @@ const ChatRoomPage = ({ navigate, chatUser }) => {
   const sendMessage = (e) => {
     e.preventDefault();
     if (!newMessage.trim()) return;
-    // Only emit to server — server broadcasts back to everyone including sender
     socketRef.current?.emit('send_message', {
       roomKey: 'lab_chat_global',
       message: newMessage,
@@ -151,7 +174,7 @@ const ChatRoomPage = ({ navigate, chatUser }) => {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input - pinned to bottom */}
+      {/* Input */}
       <div style={{ padding: '16px 24px', borderTop: '1px solid rgba(255,255,255,0.05)', background: 'rgba(0,0,0,0.95)', flexShrink: 0 }}>
         <form onSubmit={sendMessage} style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
           <label style={{ width: '44px', height: '44px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: uploading ? 'not-allowed' : 'pointer', color: '#555', flexShrink: 0, opacity: uploading ? 0.5 : 1 }}>
