@@ -7,40 +7,58 @@ import toast from 'react-hot-toast';
 const BACKEND = 'https://lab-experiment-share-production.up.railway.app';
 
 const ChatRoomPage = ({ navigate, chatUser }) => {
+  const username = chatUser?.username || 'Anonymous';
   const [messages, setMessages] = useState([
-    { id: '1', sender: 'System', text: 'Welcome to the Lab Discussion Room.', timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), isSystem: true }
+    {
+      id: '1',
+      sender: 'System',
+      text: 'Welcome to the Lab Discussion Room.',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      isSystem: true
+    }
   ]);
   const [newMessage, setNewMessage] = useState('');
   const [online, setOnline] = useState(1);
   const [uploading, setUploading] = useState(false);
   const socketRef = useRef(null);
   const bottomRef = useRef(null);
-  const username = chatUser?.username || 'Anonymous';
 
   useEffect(() => {
     const socket = io(BACKEND, { transports: ['websocket', 'polling'] });
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      socket.emit('join_room', { roomKey: 'lab_chat_global', username, collegeId: chatUser?.phone || 'anon' });
+      socket.emit('join_room', { roomKey: 'lab_chat_global', username });
     });
 
     socket.on('receive_message', (msg) => {
       setMessages(prev => [...prev, msg]);
     });
 
-    socket.on('room_users', (users) => setOnline(users.length));
+    socket.on('room_users', (users) => setOnline(users.length || 1));
 
     socket.on('user_joined', (data) => {
-      setMessages(prev => [...prev, { id: Date.now().toString(), sender: 'System', text: data.message, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), isSystem: true }]);
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        sender: 'System',
+        text: data.message,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        isSystem: true
+      }]);
     });
 
     socket.on('user_left', (data) => {
-      setMessages(prev => [...prev, { id: Date.now().toString(), sender: 'System', text: data.message, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), isSystem: true }]);
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        sender: 'System',
+        text: data.message,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        isSystem: true
+      }]);
     });
 
     return () => socket.disconnect();
-  }, []);
+  }, [username]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -49,11 +67,18 @@ const ChatRoomPage = ({ navigate, chatUser }) => {
   const sendMessage = (e) => {
     e.preventDefault();
     if (!newMessage.trim()) return;
+    const msg = {
+      id: Date.now().toString(),
+      sender: username,
+      text: newMessage,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+    // Add locally immediately
+    setMessages(prev => [...prev, msg]);
     socketRef.current?.emit('send_message', {
       roomKey: 'lab_chat_global',
       message: newMessage,
-      username,
-      collegeId: chatUser?.phone || 'anon'
+      username
     });
     setNewMessage('');
   };
@@ -63,21 +88,29 @@ const ChatRoomPage = ({ navigate, chatUser }) => {
     if (!file) return;
     if (file.size > 40 * 1024 * 1024) return toast.error('Max 40MB');
     setUploading(true);
-    const fd = new FormData();
-    fd.append('file', file);
-    fd.append('experimentId', '000000000000000000000000');
-    fd.append('group', 'A');
-    fd.append('lab', 'DBMS');
     try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('experimentId', '000000000000000000000000');
+      fd.append('group', 'A');
+      fd.append('lab', 'DBMS');
       const r = await axios.post('/api/files/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-      socketRef.current?.emit('share_file', {
-        roomKey: 'lab_chat_global',
+      const fileMsg = {
+        id: Date.now().toString(),
+        sender: username,
+        text: '📎 ' + r.data.file.originalName,
         fileUrl: r.data.file.fileUrl,
         fileName: r.data.file.originalName,
-        username,
-        collegeId: chatUser?.phone || 'anon'
+        type: 'file',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+      setMessages(prev => [...prev, fileMsg]);
+      socketRef.current?.emit('send_message', {
+        roomKey: 'lab_chat_global',
+        message: '📎 Shared a file: ' + r.data.file.originalName + ' — ' + r.data.file.fileUrl,
+        username
       });
-      toast.success('File shared in chat!');
+      toast.success('File shared!');
     } catch { toast.error('Upload failed'); }
     finally { setUploading(false); e.target.value = ''; }
   };
@@ -85,69 +118,80 @@ const ChatRoomPage = ({ navigate, chatUser }) => {
   const isMe = (sender) => sender === username;
 
   return (
-    <div className="flex flex-col min-h-screen pt-24 pb-8 px-6 max-w-6xl mx-auto animate-fade-in">
-      <div className="flex-1 bg-zinc-900/40 border border-white/5 rounded-[2.5rem] overflow-hidden flex flex-col shadow-2xl backdrop-blur-xl">
-        {/* Header */}
-        <div className="px-10 py-6 border-b border-white/5 flex items-center justify-between bg-black/40">
-          <div className="flex items-center gap-5">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#00c2ff] to-[#00ffcc] flex items-center justify-center font-bold text-black">
-              <User className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="font-black text-lg tracking-tight uppercase">Lab Discussion Room</h3>
-              <p className="text-[#00ff8c] text-[10px] font-black tracking-widest uppercase flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-[#00ff8c] animate-pulse" /> {online} Online
-              </p>
-            </div>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', paddingTop: '64px', background: '#000' }}>
+      {/* Header */}
+      <div style={{ padding: '16px 24px', borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ width: '44px', height: '44px', borderRadius: '14px', background: 'linear-gradient(135deg, #00c2ff, #00ffcc)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <User size={22} color="#000" />
           </div>
-          <div className="flex items-center gap-3">
-            <span className="text-zinc-500 text-xs font-bold uppercase">{username}</span>
-            <button onClick={() => navigate('home')} className="p-3 bg-white/5 hover:bg-red-500/20 text-zinc-500 hover:text-red-500 rounded-2xl transition-all border border-white/10 flex items-center gap-2 font-black uppercase text-xs tracking-widest">
-              Exit <LogOut className="w-4 h-4" />
-            </button>
+          <div>
+            <div style={{ fontWeight: 900, fontSize: '16px', textTransform: 'uppercase', letterSpacing: '1px', color: '#fff' }}>Lab Discussion Room</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#00ff8c', animation: 'pulse 2s infinite' }} />
+              <span style={{ color: '#00ff8c', fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '2px' }}>{online} Online</span>
+            </div>
           </div>
         </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span style={{ color: '#666', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase' }}>{username}</span>
+          <button onClick={() => navigate('home')}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#999', padding: '8px 16px', borderRadius: '12px', cursor: 'pointer', fontWeight: 900, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}
+            onMouseEnter={e => { e.target.style.background = 'rgba(255,50,50,0.2)'; e.target.style.color = '#ff5555'; }}
+            onMouseLeave={e => { e.target.style.background = 'rgba(255,255,255,0.05)'; e.target.style.color = '#999'; }}>
+            Exit <LogOut size={14} />
+          </button>
+        </div>
+      </div>
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-10 space-y-6 scrollbar-hide min-h-[400px] max-h-[60vh]">
-          {messages.map(m => (
-            <div key={m.id} className={`flex flex-col ${m.isSystem ? 'items-center' : isMe(m.sender) ? 'items-end' : 'items-start'}`}>
-              {m.isSystem ? (
-                <span className="text-[10px] font-black text-zinc-700 uppercase tracking-[0.3em] bg-white/5 px-6 py-2 rounded-full border border-white/5">{m.text}</span>
-              ) : (
-                <div className="max-w-[75%]">
-                  <div className={`flex items-center gap-3 mb-2 ${isMe(m.sender) ? 'flex-row-reverse' : ''}`}>
-                    <span className="text-[10px] font-black text-zinc-500 uppercase">{m.sender}</span>
-                    <span className="text-[9px] text-zinc-800 font-mono">{m.timestamp}</span>
-                  </div>
-                  {m.type === 'file' ? (
-                    <a href={m.fileUrl} target="_blank" rel="noreferrer"
-                      className={`flex items-center gap-3 px-6 py-4 rounded-[1.5rem] font-bold text-sm ${isMe(m.sender) ? 'bg-[#00c2ff] text-black rounded-tr-none' : 'bg-black/50 border border-white/10 text-white rounded-tl-none'}`}>
-                      <Paperclip className="w-4 h-4" /> {m.fileName}
-                    </a>
-                  ) : (
-                    <div className={`px-6 py-4 rounded-[1.5rem] font-bold text-sm leading-relaxed ${isMe(m.sender) ? 'bg-[#00c2ff] text-black rounded-tr-none shadow-xl shadow-[#00c2ff]/10' : 'bg-black/50 border border-white/10 text-white rounded-tl-none'}`}>
-                      {m.text}
-                    </div>
-                  )}
+      {/* Messages */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        {messages.map(m => (
+          <div key={m.id} style={{ display: 'flex', flexDirection: 'column', alignItems: m.isSystem ? 'center' : isMe(m.sender) ? 'flex-end' : 'flex-start' }}>
+            {m.isSystem ? (
+              <span style={{ fontSize: '10px', fontWeight: 900, color: '#444', textTransform: 'uppercase', letterSpacing: '3px', background: 'rgba(255,255,255,0.03)', padding: '6px 16px', borderRadius: '999px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                {m.text}
+              </span>
+            ) : (
+              <div style={{ maxWidth: '70%' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexDirection: isMe(m.sender) ? 'row-reverse' : 'row' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 900, color: isMe(m.sender) ? '#00c2ff' : '#ff6b00', textTransform: 'uppercase' }}>{m.sender}</span>
+                  <span style={{ fontSize: '10px', color: '#444', fontFamily: 'monospace' }}>{m.timestamp}</span>
                 </div>
-              )}
-            </div>
-          ))}
-          <div ref={bottomRef} />
-        </div>
+                {m.type === 'file' ? (
+                  <a href={m.fileUrl} target="_blank" rel="noreferrer"
+                    style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 18px', borderRadius: isMe(m.sender) ? '18px 4px 18px 18px' : '4px 18px 18px 18px', background: isMe(m.sender) ? '#00c2ff' : 'rgba(255,255,255,0.08)', color: isMe(m.sender) ? '#000' : '#fff', fontWeight: 700, fontSize: '13px', textDecoration: 'none' }}>
+                    <Paperclip size={14} /> {m.fileName}
+                  </a>
+                ) : (
+                  <div style={{ padding: '12px 18px', borderRadius: isMe(m.sender) ? '18px 4px 18px 18px' : '4px 18px 18px 18px', background: isMe(m.sender) ? '#00c2ff' : 'rgba(255,255,255,0.08)', color: isMe(m.sender) ? '#000' : '#fff', fontWeight: 600, fontSize: '14px', lineHeight: '1.5', wordBreak: 'break-word' }}>
+                    {m.text}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+        <div ref={bottomRef} />
+      </div>
 
-        {/* Input */}
-        <form onSubmit={sendMessage} className="p-6 bg-black/60 border-t border-white/5 flex gap-4 items-center">
-          <label className={`w-12 h-12 bg-zinc-900 border border-white/10 text-zinc-500 hover:text-[#00c2ff] hover:border-[#00c2ff]/40 rounded-2xl flex items-center justify-center cursor-pointer transition-all flex-shrink-0 ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
-            <Paperclip className="w-5 h-5" />
-            <input type="file" className="hidden" onChange={handleFileUpload} disabled={uploading} />
+      {/* Input - always at bottom */}
+      <div style={{ padding: '16px 24px', borderTop: '1px solid rgba(255,255,255,0.05)', background: 'rgba(0,0,0,0.9)', flexShrink: 0 }}>
+        <form onSubmit={sendMessage} style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <label style={{ width: '44px', height: '44px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: uploading ? 'not-allowed' : 'pointer', color: '#666', flexShrink: 0, opacity: uploading ? 0.5 : 1 }}>
+            <Paperclip size={18} />
+            <input type="file" style={{ display: 'none' }} onChange={handleFileUpload} disabled={uploading} />
           </label>
-          <input type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)}
+          <input
+            type="text"
+            value={newMessage}
+            onChange={e => setNewMessage(e.target.value)}
             placeholder="Share a thought..."
-            className="flex-1 bg-zinc-900/50 border border-white/10 rounded-2xl px-6 py-4 focus:border-[#00c2ff] outline-none text-white font-bold placeholder:text-zinc-800" />
-          <button type="submit" className="w-12 h-12 bg-[#00c2ff] text-black rounded-2xl flex items-center justify-center hover:bg-[#33ceff] transition-all shadow-xl flex-shrink-0">
-            <Send className="w-5 h-5" />
+            style={{ flex: 1, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '14px', padding: '12px 20px', color: '#fff', fontWeight: 600, fontSize: '14px', outline: 'none', fontFamily: 'Space Grotesk, sans-serif' }}
+          />
+          <button type="submit"
+            style={{ width: '44px', height: '44px', background: '#00c2ff', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer', flexShrink: 0 }}>
+            <Send size={18} color="#000" />
           </button>
         </form>
       </div>
