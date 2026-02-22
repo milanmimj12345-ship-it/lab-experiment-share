@@ -8,18 +8,11 @@ const BACKEND = 'https://lab-experiment-share-production.up.railway.app';
 
 const ChatRoomPage = ({ navigate, chatUser }) => {
   const username = chatUser?.username || 'Anonymous';
-  const [messages, setMessages] = useState([
-    {
-      id: '1',
-      sender: 'System',
-      text: 'Welcome to the Lab Discussion Room.',
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      isSystem: true
-    }
-  ]);
+  const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [online, setOnline] = useState(1);
   const [uploading, setUploading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const socketRef = useRef(null);
   const bottomRef = useRef(null);
 
@@ -31,30 +24,19 @@ const ChatRoomPage = ({ navigate, chatUser }) => {
       socket.emit('join_room', { roomKey: 'lab_chat_global', username });
     });
 
+    // Load full history when joining
+    socket.on('message_history', (history) => {
+      setMessages(history);
+      setLoading(false);
+    });
+
+    // Receive new messages from server (DO NOT add locally - only here)
     socket.on('receive_message', (msg) => {
       setMessages(prev => [...prev, msg]);
     });
 
-    socket.on('room_users', (users) => setOnline(users.length || 1));
-
-    socket.on('user_joined', (data) => {
-      setMessages(prev => [...prev, {
-        id: Date.now().toString(),
-        sender: 'System',
-        text: data.message,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        isSystem: true
-      }]);
-    });
-
-    socket.on('user_left', (data) => {
-      setMessages(prev => [...prev, {
-        id: Date.now().toString(),
-        sender: 'System',
-        text: data.message,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        isSystem: true
-      }]);
+    socket.on('room_users', (users) => {
+      setOnline(Array.isArray(users) ? users.length : 1);
     });
 
     return () => socket.disconnect();
@@ -67,14 +49,7 @@ const ChatRoomPage = ({ navigate, chatUser }) => {
   const sendMessage = (e) => {
     e.preventDefault();
     if (!newMessage.trim()) return;
-    const msg = {
-      id: Date.now().toString(),
-      sender: username,
-      text: newMessage,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
-    // Add locally immediately
-    setMessages(prev => [...prev, msg]);
+    // Only emit to server — server broadcasts back to everyone including sender
     socketRef.current?.emit('send_message', {
       roomKey: 'lab_chat_global',
       message: newMessage,
@@ -95,19 +70,10 @@ const ChatRoomPage = ({ navigate, chatUser }) => {
       fd.append('group', 'A');
       fd.append('lab', 'DBMS');
       const r = await axios.post('/api/files/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-      const fileMsg = {
-        id: Date.now().toString(),
-        sender: username,
-        text: '📎 ' + r.data.file.originalName,
+      socketRef.current?.emit('share_file', {
+        roomKey: 'lab_chat_global',
         fileUrl: r.data.file.fileUrl,
         fileName: r.data.file.originalName,
-        type: 'file',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
-      setMessages(prev => [...prev, fileMsg]);
-      socketRef.current?.emit('send_message', {
-        roomKey: 'lab_chat_global',
-        message: '📎 Shared a file: ' + r.data.file.originalName + ' — ' + r.data.file.fileUrl,
         username
       });
       toast.success('File shared!');
@@ -128,57 +94,67 @@ const ChatRoomPage = ({ navigate, chatUser }) => {
           <div>
             <div style={{ fontWeight: 900, fontSize: '16px', textTransform: 'uppercase', letterSpacing: '1px', color: '#fff' }}>Lab Discussion Room</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
-              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#00ff8c', animation: 'pulse 2s infinite' }} />
+              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#00ff8c' }} />
               <span style={{ color: '#00ff8c', fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '2px' }}>{online} Online</span>
             </div>
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span style={{ color: '#666', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase' }}>{username}</span>
+          <div style={{ background: 'rgba(255,107,0,0.1)', border: '1px solid rgba(255,107,0,0.3)', borderRadius: '10px', padding: '6px 14px' }}>
+            <span style={{ color: '#ff6b00', fontSize: '12px', fontWeight: 900, textTransform: 'uppercase' }}>{username}</span>
+          </div>
           <button onClick={() => navigate('home')}
-            style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#999', padding: '8px 16px', borderRadius: '12px', cursor: 'pointer', fontWeight: 900, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}
-            onMouseEnter={e => { e.target.style.background = 'rgba(255,50,50,0.2)'; e.target.style.color = '#ff5555'; }}
-            onMouseLeave={e => { e.target.style.background = 'rgba(255,255,255,0.05)'; e.target.style.color = '#999'; }}>
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#999', padding: '8px 16px', borderRadius: '12px', cursor: 'pointer', fontWeight: 900, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>
             Exit <LogOut size={14} />
           </button>
         </div>
       </div>
 
       {/* Messages */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        {messages.map(m => (
-          <div key={m.id} style={{ display: 'flex', flexDirection: 'column', alignItems: m.isSystem ? 'center' : isMe(m.sender) ? 'flex-end' : 'flex-start' }}>
-            {m.isSystem ? (
-              <span style={{ fontSize: '10px', fontWeight: 900, color: '#444', textTransform: 'uppercase', letterSpacing: '3px', background: 'rgba(255,255,255,0.03)', padding: '6px 16px', borderRadius: '999px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                {m.text}
-              </span>
-            ) : (
-              <div style={{ maxWidth: '70%' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexDirection: isMe(m.sender) ? 'row-reverse' : 'row' }}>
-                  <span style={{ fontSize: '11px', fontWeight: 900, color: isMe(m.sender) ? '#00c2ff' : '#ff6b00', textTransform: 'uppercase' }}>{m.sender}</span>
-                  <span style={{ fontSize: '10px', color: '#444', fontFamily: 'monospace' }}>{m.timestamp}</span>
-                </div>
-                {m.type === 'file' ? (
-                  <a href={m.fileUrl} target="_blank" rel="noreferrer"
-                    style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 18px', borderRadius: isMe(m.sender) ? '18px 4px 18px 18px' : '4px 18px 18px 18px', background: isMe(m.sender) ? '#00c2ff' : 'rgba(255,255,255,0.08)', color: isMe(m.sender) ? '#000' : '#fff', fontWeight: 700, fontSize: '13px', textDecoration: 'none' }}>
-                    <Paperclip size={14} /> {m.fileName}
-                  </a>
-                ) : (
-                  <div style={{ padding: '12px 18px', borderRadius: isMe(m.sender) ? '18px 4px 18px 18px' : '4px 18px 18px 18px', background: isMe(m.sender) ? '#00c2ff' : 'rgba(255,255,255,0.08)', color: isMe(m.sender) ? '#000' : '#fff', fontWeight: 600, fontSize: '14px', lineHeight: '1.5', wordBreak: 'break-word' }}>
-                    {m.text}
-                  </div>
-                )}
-              </div>
-            )}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        {loading ? (
+          <div style={{ textAlign: 'center', color: '#444', fontWeight: 900, fontSize: '12px', textTransform: 'uppercase', letterSpacing: '3px', marginTop: '40px' }}>
+            Loading messages...
           </div>
-        ))}
+        ) : messages.length === 0 ? (
+          <div style={{ textAlign: 'center', color: '#333', fontWeight: 900, fontSize: '12px', textTransform: 'uppercase', letterSpacing: '3px', marginTop: '40px' }}>
+            No messages yet — say hello! 👋
+          </div>
+        ) : (
+          messages.map((m) => (
+            <div key={m.id} style={{ display: 'flex', flexDirection: 'column', alignItems: m.isSystem ? 'center' : isMe(m.sender) ? 'flex-end' : 'flex-start' }}>
+              {m.isSystem ? (
+                <span style={{ fontSize: '10px', fontWeight: 900, color: '#444', textTransform: 'uppercase', letterSpacing: '3px', background: 'rgba(255,255,255,0.03)', padding: '6px 16px', borderRadius: '999px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                  {m.text}
+                </span>
+              ) : (
+                <div style={{ maxWidth: '70%' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px', flexDirection: isMe(m.sender) ? 'row-reverse' : 'row' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 900, color: isMe(m.sender) ? '#00c2ff' : '#ff6b00', textTransform: 'uppercase' }}>{m.sender}</span>
+                    <span style={{ fontSize: '10px', color: '#333', fontFamily: 'monospace' }}>{m.timestamp}</span>
+                  </div>
+                  {m.type === 'file' ? (
+                    <a href={m.fileUrl} target="_blank" rel="noreferrer"
+                      style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 18px', borderRadius: isMe(m.sender) ? '18px 4px 18px 18px' : '4px 18px 18px 18px', background: isMe(m.sender) ? '#00c2ff' : 'rgba(255,255,255,0.08)', color: isMe(m.sender) ? '#000' : '#fff', fontWeight: 700, fontSize: '13px', textDecoration: 'none', wordBreak: 'break-all' }}>
+                      <Paperclip size={14} style={{ flexShrink: 0 }} /> {m.fileName || m.text}
+                    </a>
+                  ) : (
+                    <div style={{ padding: '12px 18px', borderRadius: isMe(m.sender) ? '18px 4px 18px 18px' : '4px 18px 18px 18px', background: isMe(m.sender) ? '#00c2ff' : 'rgba(255,255,255,0.08)', color: isMe(m.sender) ? '#000' : '#fff', fontWeight: 600, fontSize: '14px', lineHeight: '1.5', wordBreak: 'break-word' }}>
+                      {m.text}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))
+        )}
         <div ref={bottomRef} />
       </div>
 
-      {/* Input - always at bottom */}
-      <div style={{ padding: '16px 24px', borderTop: '1px solid rgba(255,255,255,0.05)', background: 'rgba(0,0,0,0.9)', flexShrink: 0 }}>
-        <form onSubmit={sendMessage} style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <label style={{ width: '44px', height: '44px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: uploading ? 'not-allowed' : 'pointer', color: '#666', flexShrink: 0, opacity: uploading ? 0.5 : 1 }}>
+      {/* Input - pinned to bottom */}
+      <div style={{ padding: '16px 24px', borderTop: '1px solid rgba(255,255,255,0.05)', background: 'rgba(0,0,0,0.95)', flexShrink: 0 }}>
+        <form onSubmit={sendMessage} style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <label style={{ width: '44px', height: '44px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: uploading ? 'not-allowed' : 'pointer', color: '#555', flexShrink: 0, opacity: uploading ? 0.5 : 1 }}>
             <Paperclip size={18} />
             <input type="file" style={{ display: 'none' }} onChange={handleFileUpload} disabled={uploading} />
           </label>
@@ -186,7 +162,7 @@ const ChatRoomPage = ({ navigate, chatUser }) => {
             type="text"
             value={newMessage}
             onChange={e => setNewMessage(e.target.value)}
-            placeholder="Share a thought..."
+            placeholder={`Message as ${username}...`}
             style={{ flex: 1, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '14px', padding: '12px 20px', color: '#fff', fontWeight: 600, fontSize: '14px', outline: 'none', fontFamily: 'Space Grotesk, sans-serif' }}
           />
           <button type="submit"
