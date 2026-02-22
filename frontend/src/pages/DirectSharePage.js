@@ -3,6 +3,11 @@ import { Mail, Send, ArrowLeft, Paperclip, X } from 'lucide-react';
 import axios from '../axiosConfig';
 import toast from 'react-hot-toast';
 
+// EmailJS config - works with any email, no domain needed
+const EMAILJS_SERVICE_ID = 'service_7gzl6qe';
+const EMAILJS_TEMPLATE_ID = 'template_cvsrzp5';
+const EMAILJS_PUBLIC_KEY = 'ILEUCJEfvPa-YokfN'; // replaced after setup
+
 const DirectSharePage = ({ navigate }) => {
   const [email, setEmail] = useState('');
   const [file, setFile] = useState(null);
@@ -16,25 +21,43 @@ const DirectSharePage = ({ navigate }) => {
     setSending(true);
 
     try {
-      // First upload the file to get its URL
+      // Step 1: Upload file to Cloudinary to get URL
       const fd = new FormData();
       fd.append('file', file);
       fd.append('experimentId', '000000000000000000000000');
       fd.append('group', 'A');
       fd.append('lab', 'DBMS');
-      const uploadRes = await axios.post('/api/files/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const uploadRes = await axios.post('/api/files/upload', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
       const fileUrl = uploadRes.data.file.fileUrl;
       const fileName = uploadRes.data.file.originalName;
 
-      // Send email via backend
-      await axios.post('/api/share/email', { email, fileUrl, fileName, message });
+      // Step 2: Send email via EmailJS (works to ANY email!)
+      const emailjs = await import('@emailjs/browser');
+      await emailjs.send(
+        EMAILJS_SERVICE_ID,
+        EMAILJS_TEMPLATE_ID,
+        {
+          to_email: email,
+          file_name: fileName,
+          file_url: fileUrl,
+          message: message || 'A lab file has been shared with you.',
+          from_name: 'Lab Experiment Share',
+        },
+        EMAILJS_PUBLIC_KEY
+      );
+
       toast.success(`File sent to ${email}!`);
       setEmail('');
       setFile(null);
       setMessage('');
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to send email');
-    } finally { setSending(false); }
+      console.error(err);
+      toast.error('Failed to send. Please try again.');
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -49,13 +72,13 @@ const DirectSharePage = ({ navigate }) => {
       <h2 className="text-6xl font-black mb-12 tracking-tighter uppercase">Direct <span className="text-[#00ff8c]">Send</span></h2>
 
       <div className="w-full max-w-3xl">
-        <div className="bg-zinc-900/50 border border-white/5 p-12 rounded-[3rem] backdrop-blur-xl group hover:border-[#ff6b00]/30 transition-all shadow-2xl">
+        <div className="bg-zinc-900/50 border border-white/5 p-12 rounded-[3rem] backdrop-blur-xl hover:border-[#ff6b00]/30 transition-all shadow-2xl">
           <div className="flex flex-col items-center mb-10">
             <div className="w-24 h-24 bg-[#ff6b00]/10 text-[#ff6b00] rounded-[2rem] flex items-center justify-center mb-6 shadow-lg shadow-[#ff6b00]/10">
               <Mail className="w-12 h-12" />
             </div>
             <h3 className="text-3xl font-black uppercase tracking-tighter">Secure Email</h3>
-            <p className="text-zinc-500 mt-2 text-sm text-center">Send lab files directly via email to anyone</p>
+            <p className="text-zinc-500 mt-2 text-sm text-center">Send lab files directly to any email</p>
           </div>
 
           <form onSubmit={handleSendEmail} className="space-y-5">
@@ -82,7 +105,10 @@ const DirectSharePage = ({ navigate }) => {
                 <label className="flex items-center justify-center gap-3 w-full bg-black border-2 border-dashed border-white/10 rounded-2xl px-6 py-8 cursor-pointer hover:border-[#ff6b00]/40 transition-all">
                   <Paperclip className="w-5 h-5 text-zinc-500" />
                   <span className="text-zinc-500 font-bold text-sm">Click to select file (max 40MB)</span>
-                  <input type="file" className="hidden" onChange={e => { if (e.target.files[0]?.size > 40 * 1024 * 1024) { toast.error('Max 40MB'); return; } setFile(e.target.files[0]); }} />
+                  <input type="file" className="hidden" onChange={e => {
+                    if (e.target.files[0]?.size > 40 * 1024 * 1024) { toast.error('Max 40MB'); return; }
+                    setFile(e.target.files[0]);
+                  }} />
                 </label>
               )}
             </div>
