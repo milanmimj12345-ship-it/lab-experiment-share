@@ -36,10 +36,26 @@ const FileCard = ({ file, onLike, onDislike, onDelete }) => {
           </button>
         </div>
         <div className="flex gap-2">
-          <a href={file.fileUrl} target="_blank" rel="noreferrer"
+          <button
+            onClick={async () => {
+              try {
+                const response = await fetch(file.fileUrl);
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = file.originalName || 'download';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+              } catch {
+                window.open(file.fileUrl, '_blank');
+              }
+            }}
             className="w-9 h-9 bg-zinc-900 border border-white/5 text-[#ff6b00] rounded-xl hover:bg-[#ff6b00] hover:text-black transition-all flex items-center justify-center">
             <Download className="w-4 h-4" />
-          </a>
+          </button>
           <button onClick={() => onDelete(file._id)} className="w-9 h-9 bg-zinc-900 border border-white/5 text-zinc-600 rounded-xl hover:bg-red-500/20 hover:text-red-400 transition-all flex items-center justify-center">
             <Trash2 className="w-4 h-4" />
           </button>
