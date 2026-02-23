@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import axios from '../axiosConfig';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Plus, Folder, Download, ThumbsUp, ThumbsDown, AlertTriangle, Trash2 } from 'lucide-react';
+import { ArrowLeft, Plus, Folder, Download, ThumbsUp, ThumbsDown, AlertTriangle, Trash2, Eye } from 'lucide-react';
+import { isImage, PreviewModal } from './PreviewModal';
 
-const FileCard = ({ file, onLike, onDislike, onDelete }) => {
+const FileCard = ({ file, onLike, onDislike, onDelete, onPreview }) => {
   const flagged = (file.dislikes || 0) >= 5;
+  const canPreview = isImage(file.originalName);
   return (
     <div className={`relative bg-black/40 border p-6 rounded-[1.5rem] flex flex-col justify-between h-56 shadow-xl group transition-all hover:border-white/20 ${flagged ? 'border-red-500/40' : 'border-white/5'}`}>
       {flagged && (
@@ -36,6 +38,13 @@ const FileCard = ({ file, onLike, onDislike, onDelete }) => {
           </button>
         </div>
         <div className="flex gap-2">
+          {canPreview && (
+            <button onClick={() => onPreview(file)}
+              className="w-9 h-9 bg-zinc-900 border border-white/5 text-[#00c2ff] rounded-xl hover:bg-[#00c2ff] hover:text-black transition-all flex items-center justify-center"
+              title="Preview">
+              <Eye className="w-4 h-4" />
+            </button>
+          )}
           <button
             onClick={async () => {
               try {
@@ -138,7 +147,7 @@ const ExperimentSection = ({ experiment, group, lab, isRandom }) => {
               No Files Yet — Upload First
             </div>
           ) : (
-            files.map(f => <FileCard key={f._id} file={f} onLike={handleLike} onDislike={handleDislike} onDelete={handleDelete} />)
+            files.map(f => <FileCard key={f._id} file={f} onLike={handleLike} onDislike={handleDislike} onDelete={handleDelete} onPreview={setPreviewFile} />)
           )}
         </div>
       )}
@@ -153,6 +162,7 @@ const RepositoryPage = ({ navigate, group, lab }) => {
   const [showRandomForm, setShowRandomForm] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [creating, setCreating] = useState(false);
+  const [previewFile, setPreviewFile] = useState(null);
 
   const regular = experiments.filter(e => !e.isRandom);
   const random = experiments.filter(e => e.isRandom);
@@ -205,6 +215,7 @@ const RepositoryPage = ({ navigate, group, lab }) => {
 
   return (
     <div className="min-h-screen p-8 pt-32 max-w-7xl mx-auto animate-fade-in">
+      {previewFile && <PreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />}
       <button onClick={() => navigate('group_select')} className="flex items-center gap-2 text-zinc-500 hover:text-white mb-8 text-xs font-black uppercase tracking-widest transition-all group">
         <div className="w-8 h-8 rounded-full border border-white/5 flex items-center justify-center group-hover:bg-white/5"><ArrowLeft className="w-4 h-4" /></div>
         Back to Selection
