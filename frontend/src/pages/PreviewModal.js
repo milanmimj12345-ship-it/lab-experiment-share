@@ -109,17 +109,18 @@ const PreviewModal = ({ file, onClose }) => {
     }
     setAiLoading(true);
     try {
-      // Convert image URL to base64
-      const response = await fetch(file.fileUrl);
-      const blob = await response.blob();
+      const prompt = GEMINI_PROMPTS[fileType];
+
+      // Fetch image via CORS proxy, convert to base64 for Gemini
+      const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(file.fileUrl);
+      const imgResponse = await fetch(proxyUrl);
+      const blob = await imgResponse.blob();
       const base64 = await new Promise((resolve) => {
         const reader = new FileReader();
         reader.onloadend = () => resolve(reader.result.split(',')[1]);
         reader.readAsDataURL(blob);
       });
-
       const mimeType = blob.type || 'image/jpeg';
-      const prompt = GEMINI_PROMPTS[fileType];
 
       const geminiRes = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
@@ -138,11 +139,12 @@ const PreviewModal = ({ file, onClose }) => {
       );
 
       const data = await geminiRes.json();
+      if (data.error) throw new Error(data.error.message);
       const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'No content extracted.';
       setAiText(text);
       setAiDone(true);
     } catch (err) {
-      setAiText('Failed to process with AI. Check your API key and try again.\n\nError: ' + err.message);
+      setAiText('Failed to process with AI.\n\nError: ' + err.message);
       setAiDone(true);
     } finally {
       setAiLoading(false);
