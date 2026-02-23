@@ -74,7 +74,7 @@ const FileCard = ({ file, onLike, onDislike, onDelete, onPreview }) => {
   );
 };
 
-const ExperimentSection = ({ experiment, group, lab, isRandom }) => {
+const ExperimentSection = ({ experiment, group, lab, isRandom, onPreview }) => {
   const [files, setFiles] = useState([]);
   const [open, setOpen] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -147,7 +147,7 @@ const ExperimentSection = ({ experiment, group, lab, isRandom }) => {
               No Files Yet — Upload First
             </div>
           ) : (
-            files.map(f => <FileCard key={f._id} file={f} onLike={handleLike} onDislike={handleDislike} onDelete={handleDelete} onPreview={setPreviewFile} />)
+            files.map(f => <FileCard key={f._id} file={f} onLike={handleLike} onDislike={handleDislike} onDelete={handleDelete} onPreview={onPreview} />)
           )}
         </div>
       )}
@@ -249,7 +249,7 @@ const RepositoryPage = ({ navigate, group, lab }) => {
                 <button onClick={() => deleteExp(exp._id)} className="absolute top-6 right-6 z-10 w-8 h-8 bg-black/40 border border-white/5 text-zinc-600 hover:text-red-400 rounded-xl flex items-center justify-center transition-colors">
                   <Trash2 className="w-4 h-4" />
                 </button>
-                <ExperimentSection experiment={exp} group={group} lab={lab} isRandom={false} />
+                <ExperimentSection experiment={exp} group={group} lab={lab} isRandom={false} onPreview={setPreviewFile} />
               </div>
             ))}
           </div>
@@ -279,7 +279,7 @@ const RepositoryPage = ({ navigate, group, lab }) => {
                 <button onClick={() => deleteExp(exp._id)} className="absolute top-6 right-6 z-10 w-8 h-8 bg-black/40 border border-white/5 text-zinc-600 hover:text-red-400 rounded-xl flex items-center justify-center transition-colors">
                   <Trash2 className="w-4 h-4" />
                 </button>
-                <ExperimentSection experiment={exp} group={group} lab={lab} isRandom={true} />
+                <ExperimentSection experiment={exp} group={group} lab={lab} isRandom={true} onPreview={setPreviewFile} />
               </div>
             ))}
           </div>
