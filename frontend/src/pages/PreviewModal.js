@@ -111,37 +111,67 @@ const PreviewModal = ({ file, onClose }) => {
     try {
       const prompt = GEMINI_PROMPTS[fileType];
 
-      // Fetch image via CORS proxy, convert to base64 for Gemini
-      const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(file.fileUrl);
-      const imgResponse = await fetch(proxyUrl);
-      const blob = await imgResponse.blob();
-      const base64 = await new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result.split(',')[1]);
-        reader.readAsDataURL(blob);
-      });
-      const mimeType = blob.type || 'image/jpeg';
+      // Try multiple CORS proxies
+      let base64 = null;
+      let mimeType = 'image/jpeg';
+      const proxies = [
+        'https://corsproxy.io/?' + encodeURIComponent(file.fileUrl),
+        'https://api.allorigins.win/raw?url=' + encodeURIComponent(file.fileUrl),
+        file.fileUrl
+      ];
 
-      const geminiRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{
-              parts: [
-                { text: prompt },
-                { inline_data: { mime_type: mimeType, data: base64 } }
-              ]
-            }]
-          })
-        }
-      );
+      for (const proxyUrl of proxies) {
+        try {
+          const imgResponse = await fetch(proxyUrl, { mode: 'cors' });
+          if (!imgResponse.ok) continue;
+          const blob = await imgResponse.blob();
+          if (blob.size < 100) continue;
+          mimeType = blob.type || 'image/jpeg';
+          base64 = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const result = reader.result.split(',')[1];
+              if (result && result.length > 100) resolve(result);
+              else reject(new Error('Empty base64'));
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+          break;
+        } catch (e) { continue; }
+      }
 
-      const data = await geminiRes.json();
-      if (data.error) throw new Error(data.error.message);
-      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'No content extracted.';
-      setAiText(text);
+      if (!base64) throw new Error('Could not load image. Try downloading and re-uploading it.');
+
+      // Try gemini-1.5-pro first, fallback to flash
+      const models = ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-pro-vision'];
+      let text = null;
+
+      for (const model of models) {
+        try {
+          const geminiRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{
+                  parts: [
+                    { text: prompt },
+                    { inline_data: { mime_type: mimeType, data: base64 } }
+                  ]
+                }]
+              })
+            }
+          );
+          const data = await geminiRes.json();
+          if (data.error) continue;
+          text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (text) break;
+        } catch (e) { continue; }
+      }
+
+      setAiText(text || 'No content could be extracted from this image.');
       setAiDone(true);
     } catch (err) {
       setAiText('Failed to process with AI.\n\nError: ' + err.message);
