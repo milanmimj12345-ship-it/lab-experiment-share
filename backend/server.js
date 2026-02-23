@@ -142,3 +142,18 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+
+// Image proxy - fetches Cloudinary image server-side to avoid CORS
+app.get('/api/image-proxy', async (req, res) => {
+  try {
+    const { url } = req.query;
+    if (!url) return res.status(400).json({ error: 'No URL' });
+    const response = await fetch(url);
+    const buffer = await response.arrayBuffer();
+    const base64 = Buffer.from(buffer).toString('base64');
+    const contentType = response.headers.get('content-type') || 'image/jpeg';
+    res.json({ base64, mimeType: contentType });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});

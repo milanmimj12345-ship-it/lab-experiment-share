@@ -14,7 +14,8 @@ const detectType = (fileName) => {
   const name = (fileName || '').toLowerCase();
   if (name.includes('sql') || name.includes('dbms') || name.includes('mysql') || name.includes('db')) return 'dbms';
   if (name.includes('.c') || name.includes('program') || name.includes('code')) return 'c';
-  return 'linux'; // default
+  if (name.includes('linux') || name.includes('terminal') || name.includes('bash') || name.includes('shell')) return 'linux';
+  return 'dbms'; // default to dbms since most lab images are SQL
 };
 
 const GEMINI_PROMPTS = {
@@ -64,7 +65,7 @@ const PreviewModal = ({ file, onClose }) => {
   const [aiDone, setAiDone] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
   const [copied, setCopied] = useState(false);
-  const fileType = detectType(file.originalName || file.fileName || '');
+  const [contentType, setContentType] = useState(detectType(file.originalName || file.fileName || ''));
 
   // Run OCR when switching to text mode
   useEffect(() => {
@@ -109,69 +110,36 @@ const PreviewModal = ({ file, onClose }) => {
     }
     setAiLoading(true);
     try {
-      const prompt = GEMINI_PROMPTS[fileType];
+      const prompt = GEMINI_PROMPTS[contentType];
 
-      // Try multiple CORS proxies
-      let base64 = null;
-      let mimeType = 'image/jpeg';
-      const proxies = [
-        'https://corsproxy.io/?' + encodeURIComponent(file.fileUrl),
-        'https://api.allorigins.win/raw?url=' + encodeURIComponent(file.fileUrl),
-        file.fileUrl
-      ];
+      // Use backend proxy to fetch image - avoids all CORS issues
+      const proxyRes = await fetch(
+        'https://lab-experiment-share-production.up.railway.app/api/image-proxy?url=' + encodeURIComponent(file.fileUrl)
+      );
+      const { base64, mimeType } = await proxyRes.json();
 
-      for (const proxyUrl of proxies) {
-        try {
-          const imgResponse = await fetch(proxyUrl, { mode: 'cors' });
-          if (!imgResponse.ok) continue;
-          const blob = await imgResponse.blob();
-          if (blob.size < 100) continue;
-          mimeType = blob.type || 'image/jpeg';
-          base64 = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-              const result = reader.result.split(',')[1];
-              if (result && result.length > 100) resolve(result);
-              else reject(new Error('Empty base64'));
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
-          });
-          break;
-        } catch (e) { continue; }
-      }
+      if (!base64) throw new Error('Could not load image via proxy');
 
-      if (!base64) throw new Error('Could not load image. Try downloading and re-uploading it.');
+      const geminiRes = await fetch(
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + GEMINI_API_KEY,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                { text: prompt },
+                { inline_data: { mime_type: mimeType || 'image/jpeg', data: base64 } }
+              ]
+            }]
+          })
+        }
+      );
 
-      // Try gemini-1.5-pro first, fallback to flash
-      const models = ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-pro-vision'];
-      let text = null;
-
-      for (const model of models) {
-        try {
-          const geminiRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                contents: [{
-                  parts: [
-                    { text: prompt },
-                    { inline_data: { mime_type: mimeType, data: base64 } }
-                  ]
-                }]
-              })
-            }
-          );
-          const data = await geminiRes.json();
-          if (data.error) continue;
-          text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (text) break;
-        } catch (e) { continue; }
-      }
-
-      setAiText(text || 'No content could be extracted from this image.');
+      const data = await geminiRes.json();
+      if (data.error) throw new Error(data.error.message);
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'No content extracted.';
+      setAiText(text);
       setAiDone(true);
     } catch (err) {
       setAiText('Failed to process with AI.\n\nError: ' + err.message);
@@ -180,6 +148,8 @@ const PreviewModal = ({ file, onClose }) => {
       setAiLoading(false);
     }
   };
+
+;
 
   const copyText = (text) => {
     navigator.clipboard.writeText(text);
@@ -227,6 +197,19 @@ const PreviewModal = ({ file, onClose }) => {
               {tab.label}
             </button>
           ))}
+
+          {/* Content type selector for AI mode */}
+          {mode === 'ai' && (
+            <select
+              value={contentType}
+              onChange={e => { setContentType(e.target.value); setAiDone(false); setAiText(''); }}
+              style={{ marginLeft: '8px', background: '#111', border: '1px solid rgba(0,255,140,0.3)', color: '#00ff8c', borderRadius: '10px', padding: '8px 12px', fontWeight: 900, fontSize: '11px', cursor: 'pointer', textTransform: 'uppercase' }}
+            >
+              <option value="dbms">DBMS / SQL</option>
+              <option value="linux">Linux Terminal</option>
+              <option value="c">C Program</option>
+            </select>
+          )}
 
           {/* Copy button for text modes */}
           {mode !== 'normal' && currentText && !isLoading && (
