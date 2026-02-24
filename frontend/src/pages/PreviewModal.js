@@ -260,10 +260,10 @@ const PreviewModal = ({ file, onClose }) => {
               <div style={{ marginBottom: '16px', padding: '12px 16px', background: 'rgba(0,255,140,0.05)', border: '1px solid rgba(0,255,140,0.15)', borderRadius: '12px', display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
                 <Sparkles size={14} color="#00ff8c" style={{ marginTop: '1px', flexShrink: 0 }} />
                 <p style={{ color: '#00ff8c', fontSize: '11px', fontWeight: 700, margin: 0, lineHeight: '1.6' }}>
-                  AI Mode — Detected: <strong>{fileType.toUpperCase()}</strong> content.
-                  {fileType === 'dbms' && ' Extracting only successful SQL commands.'}
-                  {fileType === 'linux' && ' Extracting only successfully executed commands.'}
-                  {fileType === 'c' && ' Extracting clean C source code.'}
+                  AI Mode — Detected: <strong>{contentType.toUpperCase()}</strong> content.
+                  {contentType === 'dbms' && ' Extracting only successful SQL commands.'}
+                  {contentType === 'linux' && ' Extracting only successfully executed commands.'}
+                  {contentType === 'c' && ' Extracting clean C source code.'}
                 </p>
               </div>
               {aiLoading ? (
