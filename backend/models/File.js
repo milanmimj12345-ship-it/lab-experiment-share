@@ -14,6 +14,8 @@ const fileSchema = new mongoose.Schema({
   likes: { type: Number, default: 0 },
   dislikes: { type: Number, default: 0 },
   isFlagged: { type: Boolean, default: false },
+  folderName: { type: String, default: null }, // null = root level, string = inside this folder
+  isFolder: { type: Boolean, default: false }, // true = empty folder marker
 }, { timestamps: true });
 
 module.exports = mongoose.model('File', fileSchema);
