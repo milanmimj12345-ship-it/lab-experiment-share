@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Eye, FileText, Sparkles, Copy, Check, Loader } from 'lucide-react';
 
-const GEMINI_API_KEY = process.env.REACT_APP_GEMINI_API_KEY || '';
-
 const IMAGE_TYPES = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'];
 
 const isImage = (fileName) => {
@@ -103,43 +101,23 @@ const PreviewModal = ({ file, onClose }) => {
   };
 
   const runAI = async () => {
-    if (!GEMINI_API_KEY) {
-      setAiText('⚠️ Gemini API key not configured.\n\nAdd REACT_APP_GEMINI_API_KEY to your Render environment variables.');
-      setAiDone(true);
-      return;
-    }
     setAiLoading(true);
     try {
       const prompt = GEMINI_PROMPTS[contentType];
 
-      // Use backend proxy to fetch image - avoids all CORS issues
-      const proxyRes = await fetch(
-        'https://lab-experiment-share-production.up.railway.app/api/image-proxy?url=' + encodeURIComponent(file.fileUrl)
-      );
-      const { base64, mimeType } = await proxyRes.json();
-
-      if (!base64) throw new Error('Could not load image via proxy');
-
-      const geminiRes = await fetch(
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + GEMINI_API_KEY,
+      // Call backend AI proxy - Gemini key is secured on Railway server
+      const res = await fetch(
+        'https://lab-experiment-share-production.up.railway.app/api/ai-analyze',
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{
-              parts: [
-                { text: prompt },
-                { inline_data: { mime_type: mimeType || 'image/jpeg', data: base64 } }
-              ]
-            }]
-          })
+          body: JSON.stringify({ imageUrl: file.fileUrl, prompt })
         }
       );
 
-      const data = await geminiRes.json();
-      if (data.error) throw new Error(data.error.message);
-      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'No content extracted.';
-      setAiText(text);
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'AI processing failed');
+      setAiText(data.text);
       setAiDone(true);
     } catch (err) {
       setAiText('Failed to process with AI.\n\nError: ' + err.message);

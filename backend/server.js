@@ -157,3 +157,44 @@ app.get('/api/image-proxy', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// Gemini AI proxy - calls Gemini from backend to protect API key and avoid quota issues
+app.post('/api/ai-analyze', async (req, res) => {
+  try {
+    const { imageUrl, prompt } = req.body;
+    if (!imageUrl || !prompt) return res.status(400).json({ error: 'imageUrl and prompt required' });
+
+    const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+    if (!GEMINI_API_KEY) return res.status(500).json({ error: 'Gemini API key not configured on server' });
+
+    // Fetch image
+    const imgResponse = await fetch(imageUrl);
+    const buffer = await imgResponse.arrayBuffer();
+    const base64 = Buffer.from(buffer).toString('base64');
+    const mimeType = imgResponse.headers.get('content-type') || 'image/jpeg';
+
+    // Call Gemini
+    const geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: prompt },
+              { inline_data: { mime_type: mimeType, data: base64 } }
+            ]
+          }]
+        })
+      }
+    );
+
+    const data = await geminiRes.json();
+    if (data.error) return res.status(429).json({ error: data.error.message });
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'No content extracted.';
+    res.json({ success: true, text });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
