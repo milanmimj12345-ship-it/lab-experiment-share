@@ -3,69 +3,68 @@ import axios from '../axiosConfig';
 import toast from 'react-hot-toast';
 import {
   ArrowLeft, Plus, Folder, FolderOpen, Download, ThumbsUp, ThumbsDown,
-  AlertTriangle, Trash2, Eye, Upload, FolderPlus, FolderUp, X, ChevronDown, ChevronRight, File as FileIcon
+  AlertTriangle, Trash2, Eye, Upload, FolderPlus, FolderUp, X,
+  ChevronDown, ChevronRight, File as FileIcon, ArrowDownToLine
 } from 'lucide-react';
 import { isImage, PreviewModal } from './PreviewModal';
 
-// ─── File Card ────────────────────────────────────────────────────────────────
-const FileCard = ({ file, onLike, onDislike, onDelete, onPreview }) => {
+// ─── Small File Card ──────────────────────────────────────────────────────────
+const FileCard = ({ file, onLike, onDislike, onDelete, onPreview, compact = false }) => {
   const flagged = (file.dislikes || 0) >= 5;
   const canPreview = isImage(file.originalName);
+  const ext = file.originalName?.split('.').pop()?.toLowerCase() || 'file';
+
+  const downloadFile = async () => {
+    try {
+      const response = await fetch(file.fileUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = file.originalName || 'download';
+      document.body.appendChild(a); a.click(); a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch { window.open(file.fileUrl, '_blank'); }
+  };
+
   return (
-    <div className={`relative bg-black/40 border p-5 rounded-[1.5rem] flex flex-col justify-between h-52 shadow-xl group transition-all hover:border-white/20 ${flagged ? 'border-red-500/40' : 'border-white/5'}`}>
+    <div className={`relative bg-black/50 border rounded-2xl flex flex-col justify-between group transition-all hover:border-white/20 shadow-lg ${flagged ? 'border-red-500/40' : 'border-white/8'} ${compact ? 'p-3 h-36' : 'p-4 h-44'}`}>
       {flagged && (
-        <div className="absolute top-0 right-0 p-2 bg-red-600/20 text-red-500 rounded-bl-2xl rounded-tr-[1.5rem] border-l border-b border-red-500/30 flex items-center gap-1 text-[9px] font-black uppercase">
-          <AlertTriangle className="w-3 h-3" /> May Contain Errors
+        <div className="absolute top-0 right-0 p-1.5 bg-red-600/20 text-red-500 rounded-bl-xl rounded-tr-2xl border-l border-b border-red-500/30 flex items-center gap-1 text-[8px] font-black uppercase">
+          <AlertTriangle className="w-2.5 h-2.5" /> Errors
         </div>
       )}
       <div>
-        <div className="flex items-start justify-between mb-3">
-          <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-zinc-400 group-hover:text-[#ff6b00] transition-colors">
-            <FileIcon className="w-5 h-5" />
+        <div className="flex items-start justify-between mb-2">
+          <div className={`bg-white/5 rounded-xl flex items-center justify-center text-zinc-400 group-hover:text-[#ff6b00] transition-colors ${compact ? 'w-8 h-8' : 'w-9 h-9'}`}>
+            <FileIcon className={compact ? 'w-4 h-4' : 'w-5 h-5'} />
           </div>
-          <span className="text-[9px] text-zinc-600 font-mono uppercase bg-white/5 px-2 py-1 rounded-full">
-            {file.originalName?.split('.').pop() || 'file'}
-          </span>
+          <span className="text-[8px] text-zinc-600 font-mono uppercase bg-white/5 px-1.5 py-0.5 rounded-full">{ext}</span>
         </div>
-        <h5 className="font-black text-sm mb-1 truncate">{file.originalName}</h5>
-        <p className="text-zinc-600 text-[10px] font-bold uppercase tracking-wider">
+        <h5 className={`font-black truncate leading-tight ${compact ? 'text-[11px] mb-0.5' : 'text-xs mb-1'}`} title={file.originalName}>{file.originalName}</h5>
+        <p className="text-zinc-700 text-[9px] font-bold uppercase tracking-wider">
           {file.createdAt ? new Date(file.createdAt).toLocaleDateString() : 'Just now'}
         </p>
       </div>
-      <div className="flex items-center justify-between pt-3 border-t border-white/5">
-        <div className="flex items-center gap-2">
-          <button onClick={() => onLike(file._id)} className="flex items-center gap-1 text-zinc-500 hover:text-green-400 text-xs font-bold transition-colors">
+      <div className={`flex items-center justify-between border-t border-white/5 ${compact ? 'pt-2' : 'pt-3'}`}>
+        <div className="flex items-center gap-1.5">
+          <button onClick={() => onLike(file._id)} className="flex items-center gap-0.5 text-zinc-600 hover:text-green-400 text-[10px] font-bold transition-colors">
             <ThumbsUp className="w-3 h-3" /> {file.likes || 0}
           </button>
-          <button onClick={() => onDislike(file._id)} className="flex items-center gap-1 text-zinc-500 hover:text-red-400 text-xs font-bold transition-colors">
+          <button onClick={() => onDislike(file._id)} className="flex items-center gap-0.5 text-zinc-600 hover:text-red-400 text-[10px] font-bold transition-colors">
             <ThumbsDown className="w-3 h-3" /> {file.dislikes || 0}
           </button>
         </div>
-        <div className="flex gap-1.5">
+        <div className="flex gap-1">
           {canPreview && (
-            <button onClick={() => onPreview(file)}
-              className="w-8 h-8 bg-zinc-900 border border-white/5 text-[#00c2ff] rounded-xl hover:bg-[#00c2ff] hover:text-black transition-all flex items-center justify-center"
-              title="Preview">
-              <Eye className="w-3.5 h-3.5" />
+            <button onClick={() => onPreview(file)} className="w-7 h-7 bg-zinc-900 border border-white/5 text-[#00c2ff] rounded-lg hover:bg-[#00c2ff] hover:text-black transition-all flex items-center justify-center" title="Preview">
+              <Eye className="w-3 h-3" />
             </button>
           )}
-          <button
-            onClick={async () => {
-              try {
-                const response = await fetch(file.fileUrl);
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url; a.download = file.originalName || 'download';
-                document.body.appendChild(a); a.click(); a.remove();
-                window.URL.revokeObjectURL(url);
-              } catch { window.open(file.fileUrl, '_blank'); }
-            }}
-            className="w-8 h-8 bg-zinc-900 border border-white/5 text-[#ff6b00] rounded-xl hover:bg-[#ff6b00] hover:text-black transition-all flex items-center justify-center">
-            <Download className="w-3.5 h-3.5" />
+          <button onClick={downloadFile} className="w-7 h-7 bg-zinc-900 border border-white/5 text-[#ff6b00] rounded-lg hover:bg-[#ff6b00] hover:text-black transition-all flex items-center justify-center" title="Download">
+            <Download className="w-3 h-3" />
           </button>
-          <button onClick={() => onDelete(file._id)} className="w-8 h-8 bg-zinc-900 border border-white/5 text-zinc-600 rounded-xl hover:bg-red-500/20 hover:text-red-400 transition-all flex items-center justify-center">
-            <Trash2 className="w-3.5 h-3.5" />
+          <button onClick={() => onDelete(file._id)} className="w-7 h-7 bg-zinc-900 border border-white/5 text-zinc-600 rounded-lg hover:bg-red-500/20 hover:text-red-400 transition-all flex items-center justify-center" title="Delete">
+            <Trash2 className="w-3 h-3" />
           </button>
         </div>
       </div>
@@ -73,17 +72,16 @@ const FileCard = ({ file, onLike, onDislike, onDelete, onPreview }) => {
   );
 };
 
-// ─── Folder Section (files inside a folder) ──────────────────────────────────
-const FolderSection = ({ folderName, files, experimentId, group, lab, onLike, onDislike, onDelete, onPreview, onFolderDelete, onFilesAdded }) => {
-  const [open, setOpen] = useState(true);
+// ─── Folder Card (looks like a file card) ────────────────────────────────────
+const FolderCard = ({ folderName, files, experimentId, group, lab, onLike, onDislike, onDelete, onPreview, onFolderDelete, onFilesAdded }) => {
+  const [open, setOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const fileInputRef = useRef();
+  const realFiles = files.filter(f => !f.isFolder);
 
   const handleAddFiles = async (e) => {
     const selectedFiles = Array.from(e.target.files);
     if (!selectedFiles.length) return;
-    const oversized = selectedFiles.find(f => f.size > 40 * 1024 * 1024);
-    if (oversized) return toast.error('Max 40MB per file!');
+    if (selectedFiles.find(f => f.size > 40 * 1024 * 1024)) return toast.error('Max 40MB per file!');
     setUploading(true);
     try {
       const results = [];
@@ -98,61 +96,109 @@ const FolderSection = ({ folderName, files, experimentId, group, lab, onLike, on
         results.push(r.data.file);
       }
       onFilesAdded(folderName, results);
-      toast.success(`${results.length} file(s) added to "${folderName}"!`);
+      toast.success(`${results.length} file(s) added!`);
     } catch { toast.error('Upload failed'); }
     finally { setUploading(false); e.target.value = ''; }
   };
 
-  const realFiles = files.filter(f => !f.isFolder);
+  const downloadFolder = async () => {
+    if (realFiles.length === 0) return toast.error('Folder is empty!');
+    toast.success(`Downloading ${realFiles.length} file(s)...`);
+    for (const file of realFiles) {
+      try {
+        const response = await fetch(file.fileUrl);
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = file.originalName || 'file';
+        document.body.appendChild(a); a.click(); a.remove();
+        window.URL.revokeObjectURL(url);
+        await new Promise(r => setTimeout(r, 300));
+      } catch { window.open(file.fileUrl, '_blank'); }
+    }
+  };
 
   return (
-    <div className="bg-zinc-950/60 border border-white/8 rounded-[1.5rem] overflow-hidden">
-      {/* Folder header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
-        <button onClick={() => setOpen(!open)} className="flex items-center gap-3 text-left flex-1">
-          <div className="w-9 h-9 bg-[#ff6b00]/10 rounded-xl flex items-center justify-center">
-            {open ? <FolderOpen className="w-5 h-5 text-[#ff6b00]" /> : <Folder className="w-5 h-5 text-[#ff6b00]" />}
+    <>
+      {/* Folder card — same size as file card */}
+      <div className="relative bg-black/50 border border-white/8 rounded-2xl p-4 h-44 flex flex-col justify-between group transition-all hover:border-[#ff6b00]/40 shadow-lg cursor-pointer"
+        onClick={() => setOpen(true)}>
+        <div>
+          <div className="flex items-start justify-between mb-2">
+            <div className="w-9 h-9 bg-[#ff6b00]/10 rounded-xl flex items-center justify-center group-hover:bg-[#ff6b00]/20 transition-colors">
+              <Folder className="w-5 h-5 text-[#ff6b00]" />
+            </div>
+            <span className="text-[8px] text-[#ff6b00]/60 font-mono uppercase bg-[#ff6b00]/5 px-1.5 py-0.5 rounded-full border border-[#ff6b00]/10">folder</span>
           </div>
-          <div>
-            <p className="font-black text-sm text-white">{folderName}</p>
-            <p className="text-[10px] text-zinc-600 font-bold uppercase tracking-wider">{realFiles.length} file{realFiles.length !== 1 ? 's' : ''}</p>
+          <h5 className="font-black text-xs truncate leading-tight mb-0.5" title={folderName}>{folderName}</h5>
+          <p className="text-zinc-700 text-[9px] font-bold uppercase tracking-wider">{realFiles.length} file{realFiles.length !== 1 ? 's' : ''} inside</p>
+        </div>
+        <div className="flex items-center justify-between pt-3 border-t border-white/5">
+          <span className="text-[9px] text-zinc-600 font-black uppercase tracking-wider">Click to open</span>
+          <div className="flex gap-1" onClick={e => e.stopPropagation()}>
+            <button onClick={downloadFolder} className="w-7 h-7 bg-zinc-900 border border-white/5 text-[#ff6b00] rounded-lg hover:bg-[#ff6b00] hover:text-black transition-all flex items-center justify-center" title="Download all">
+              <ArrowDownToLine className="w-3 h-3" />
+            </button>
+            <button onClick={() => onFolderDelete(folderName)} className="w-7 h-7 bg-zinc-900 border border-white/5 text-zinc-600 rounded-lg hover:bg-red-500/20 hover:text-red-400 transition-all flex items-center justify-center" title="Delete folder">
+              <Trash2 className="w-3 h-3" />
+            </button>
           </div>
-          <span className="text-zinc-600 ml-2">{open ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}</span>
-        </button>
-
-        <div className="flex items-center gap-2">
-          {/* Add files to this folder */}
-          <label className={`cursor-pointer flex items-center gap-1.5 text-[10px] bg-white/5 hover:bg-white/10 text-white px-3 py-1.5 rounded-full font-black border border-white/10 tracking-widest uppercase transition-all ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
-            <Plus className="w-3 h-3" />
-            {uploading ? 'Uploading...' : 'Add Files'}
-            <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleAddFiles} disabled={uploading} />
-          </label>
-          {/* Delete folder */}
-          <button onClick={() => onFolderDelete(folderName)}
-            className="w-7 h-7 bg-zinc-900 border border-white/5 text-zinc-600 rounded-xl hover:bg-red-500/20 hover:text-red-400 transition-all flex items-center justify-center"
-            title="Delete folder">
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
         </div>
       </div>
 
-      {/* Files grid */}
+      {/* Folder modal — opens when clicked */}
       {open && (
-        <div className="p-6">
-          {realFiles.length === 0 ? (
-            <div className="py-10 text-center border-2 border-dashed border-white/5 rounded-[1.5rem] text-zinc-700 font-black uppercase tracking-widest text-[10px]">
-              Empty Folder — Click "Add Files" to upload
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', backdropFilter: 'blur(10px)' }}>
+          <div style={{ background: '#0a0a0a', border: '1px solid rgba(255,107,0,0.2)', borderRadius: '28px', width: '100%', maxWidth: '1000px', maxHeight: '88vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 0 80px rgba(0,0,0,0.9)' }}>
+
+            {/* Modal header */}
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-[#ff6b00]/15 rounded-xl flex items-center justify-center">
+                  <FolderOpen className="w-5 h-5 text-[#ff6b00]" />
+                </div>
+                <div>
+                  <h3 style={{ fontWeight: 900, fontSize: '15px', textTransform: 'uppercase', letterSpacing: '1px', color: '#fff', margin: 0 }}>{folderName}</h3>
+                  <p style={{ color: '#555', fontSize: '10px', fontWeight: 700, margin: '2px 0 0', textTransform: 'uppercase', letterSpacing: '2px' }}>{realFiles.length} file{realFiles.length !== 1 ? 's' : ''}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={downloadFolder}
+                  className="flex items-center gap-2 px-4 py-2 bg-[#ff6b00]/10 border border-[#ff6b00]/30 text-[#ff6b00] rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-[#ff6b00]/20 transition-all">
+                  <ArrowDownToLine className="w-3 h-3" /> Download All
+                </button>
+                <label className={`flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 text-white rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all cursor-pointer ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                  <Plus className="w-3 h-3" /> {uploading ? 'Uploading...' : 'Add Files'}
+                  <input type="file" multiple className="hidden" onChange={handleAddFiles} disabled={uploading} />
+                </label>
+                <button onClick={() => setOpen(false)} style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#666', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <X size={15} />
+                </button>
+              </div>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {realFiles.map(f => (
-                <FileCard key={f._id} file={f} onLike={onLike} onDislike={onDislike} onDelete={onDelete} onPreview={onPreview} />
-              ))}
+
+            {/* Files grid inside folder */}
+            <div style={{ flex: 1, overflow: 'auto', padding: '24px' }}>
+              {realFiles.length === 0 ? (
+                <div className="py-20 text-center border-2 border-dashed border-white/5 rounded-[2rem] text-zinc-700 font-black uppercase tracking-widest text-xs">
+                  Empty Folder — Click "Add Files" to upload
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                  {realFiles.map(f => (
+                    <FileCard key={f._id} file={f} compact
+                      onLike={onLike} onDislike={onDislike} onDelete={onDelete} onPreview={onPreview}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
 
@@ -160,34 +206,27 @@ const FolderSection = ({ folderName, files, experimentId, group, lab, onLike, on
 const CreateFolderModal = ({ onConfirm, onClose }) => {
   const [name, setName] = useState('');
   return (
-    <div
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    <div onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', backdropFilter: 'blur(8px)' }}>
-      <div style={{ background: '#0d0d0d', border: '1px solid rgba(255,107,0,0.3)', borderRadius: '24px', padding: '32px', width: '100%', maxWidth: '420px', boxShadow: '0 0 60px rgba(255,107,0,0.1)' }}>
-        <div className="flex items-center justify-between mb-6">
+      <div style={{ background: '#0d0d0d', border: '1px solid rgba(255,107,0,0.3)', borderRadius: '24px', padding: '32px', width: '100%', maxWidth: '400px', boxShadow: '0 0 60px rgba(255,107,0,0.1)' }}>
+        <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#ff6b00]/15 rounded-xl flex items-center justify-center">
-              <FolderPlus className="w-5 h-5 text-[#ff6b00]" />
+            <div className="w-9 h-9 bg-[#ff6b00]/15 rounded-xl flex items-center justify-center">
+              <FolderPlus className="w-4 h-4 text-[#ff6b00]" />
             </div>
             <h3 className="font-black text-white text-sm uppercase tracking-widest">New Folder</h3>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 text-zinc-500 hover:text-white flex items-center justify-center">
-            <X className="w-4 h-4" />
+          <button onClick={onClose} className="w-7 h-7 rounded-xl bg-white/5 border border-white/10 text-zinc-500 hover:text-white flex items-center justify-center">
+            <X className="w-3.5 h-3.5" />
           </button>
         </div>
-        <p className="text-zinc-500 text-xs font-bold uppercase tracking-wider mb-4">Enter a name for your new folder</p>
-        <input
-          value={name}
-          onChange={e => setName(e.target.value)}
+        <p className="text-zinc-600 text-[10px] font-bold uppercase tracking-wider mb-3">Enter folder name</p>
+        <input value={name} onChange={e => setName(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && name.trim() && onConfirm(name.trim())}
-          placeholder="e.g. Group A Screenshots"
-          autoFocus
-          className="w-full bg-black border border-white/10 rounded-2xl px-5 py-3.5 mb-5 outline-none text-white font-bold focus:border-[#ff6b00] transition-all text-sm"
-        />
+          placeholder="e.g. Group A Screenshots" autoFocus
+          className="w-full bg-black border border-white/10 rounded-2xl px-5 py-3 mb-4 outline-none text-white font-bold focus:border-[#ff6b00] transition-all text-sm" />
         <div className="flex gap-3">
-          <button
-            onClick={() => name.trim() && onConfirm(name.trim())}
-            disabled={!name.trim()}
+          <button onClick={() => name.trim() && onConfirm(name.trim())} disabled={!name.trim()}
             className="flex-1 bg-[#ff6b00] text-black px-6 py-2.5 rounded-full font-black text-xs uppercase tracking-wider hover:bg-[#ff9e00] transition-colors disabled:opacity-40 disabled:pointer-events-none">
             Create Folder
           </button>
@@ -200,50 +239,40 @@ const CreateFolderModal = ({ onConfirm, onClose }) => {
   );
 };
 
-// ─── Upload Menu ─────────────────────────────────────────────────────────────
+// ─── Upload Dropdown ──────────────────────────────────────────────────────────
 const UploadMenu = ({ onSingleFile, onFolderUpload, onCreateFolder, uploading }) => {
   const [open, setOpen] = useState(false);
   const ref = useRef();
-
   useEffect(() => {
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
   }, []);
 
   return (
     <div className="relative" ref={ref}>
-      <button
-        onClick={() => setOpen(!open)}
-        disabled={uploading}
-        className={`flex items-center gap-2 text-[10px] bg-white/5 hover:bg-white/10 text-white px-4 py-2 rounded-full font-black border border-white/10 tracking-widest uppercase transition-all ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
+      <button onClick={() => setOpen(!open)} disabled={uploading}
+        className={`flex items-center gap-1.5 text-[10px] bg-white/5 hover:bg-white/10 text-white px-4 py-2 rounded-full font-black border border-white/10 tracking-widest uppercase transition-all ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
         <Upload className="w-3 h-3" />
         {uploading ? 'Uploading...' : 'Upload'}
         <ChevronDown className="w-3 h-3" />
       </button>
-
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-52 bg-zinc-900 border border-white/10 rounded-2xl overflow-hidden shadow-2xl z-50">
-          {/* Upload single file */}
+        <div className="absolute right-0 top-full mt-2 w-48 bg-zinc-900 border border-white/10 rounded-2xl overflow-hidden shadow-2xl z-50">
           <label className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 cursor-pointer transition-colors">
             <FileIcon className="w-4 h-4 text-[#ff6b00]" />
-            <span className="text-xs font-black text-white uppercase tracking-wider">Upload File</span>
+            <span className="text-[11px] font-black text-white uppercase tracking-wider">Upload File</span>
             <input type="file" className="hidden" onChange={(e) => { onSingleFile(e); setOpen(false); }} />
           </label>
-
-          {/* Upload folder */}
           <label className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 cursor-pointer transition-colors border-t border-white/5">
             <FolderUp className="w-4 h-4 text-[#00c2ff]" />
-            <span className="text-xs font-black text-white uppercase tracking-wider">Upload Folder</span>
+            <span className="text-[11px] font-black text-white uppercase tracking-wider">Upload Folder</span>
             <input type="file" className="hidden" webkitdirectory="true" multiple onChange={(e) => { onFolderUpload(e); setOpen(false); }} />
           </label>
-
-          {/* Create empty folder */}
-          <button
-            onClick={() => { onCreateFolder(); setOpen(false); }}
+          <button onClick={() => { onCreateFolder(); setOpen(false); }}
             className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 cursor-pointer transition-colors border-t border-white/5">
             <FolderPlus className="w-4 h-4 text-[#00ff8c]" />
-            <span className="text-xs font-black text-white uppercase tracking-wider">New Empty Folder</span>
+            <span className="text-[11px] font-black text-white uppercase tracking-wider">New Empty Folder</span>
           </button>
         </div>
       )}
@@ -264,7 +293,6 @@ const ExperimentSection = ({ experiment, group, lab, isRandom, onPreview }) => {
       .catch(() => {});
   }, [experiment._id]);
 
-  // Group files: root files + folders
   const rootFiles = files.filter(f => !f.folderName && !f.isFolder);
   const folderMap = {};
   files.filter(f => f.folderName).forEach(f => {
@@ -273,17 +301,14 @@ const ExperimentSection = ({ experiment, group, lab, isRandom, onPreview }) => {
   });
   const folderNames = Object.keys(folderMap);
 
-  // Single file upload (root)
   const handleSingleUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     if (file.size > 40 * 1024 * 1024) return toast.error('Max 40MB!');
     setUploading(true);
     const fd = new FormData();
-    fd.append('file', file);
-    fd.append('experimentId', experiment._id);
-    fd.append('group', group);
-    fd.append('lab', lab);
+    fd.append('file', file); fd.append('experimentId', experiment._id);
+    fd.append('group', group); fd.append('lab', lab);
     try {
       const r = await axios.post('/api/files/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
       setFiles(prev => [r.data.file, ...prev]);
@@ -292,23 +317,18 @@ const ExperimentSection = ({ experiment, group, lab, isRandom, onPreview }) => {
     finally { setUploading(false); e.target.value = ''; }
   };
 
-  // Folder upload (webkitdirectory)
   const handleFolderUpload = async (e) => {
     const selectedFiles = Array.from(e.target.files);
     if (!selectedFiles.length) return;
-    // Get folder name from path
     const firstPath = selectedFiles[0].webkitRelativePath || selectedFiles[0].name;
     const folderName = firstPath.includes('/') ? firstPath.split('/')[0] : `Folder_${Date.now()}`;
-    const oversized = selectedFiles.find(f => f.size > 40 * 1024 * 1024);
-    if (oversized) return toast.error('Max 40MB per file!');
+    if (selectedFiles.find(f => f.size > 40 * 1024 * 1024)) return toast.error('Max 40MB per file!');
     setUploading(true);
     try {
       const fd = new FormData();
       selectedFiles.forEach(f => fd.append('files', f));
-      fd.append('experimentId', experiment._id);
-      fd.append('group', group);
-      fd.append('lab', lab);
-      fd.append('folderName', folderName);
+      fd.append('experimentId', experiment._id); fd.append('group', group);
+      fd.append('lab', lab); fd.append('folderName', folderName);
       const r = await axios.post('/api/files/upload-folder', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
       setFiles(prev => [...(r.data.files || []), ...prev.filter(f => !(f.folderName === folderName && f.isFolder))]);
       toast.success(`Folder "${folderName}" uploaded with ${r.data.files.length} file(s)!`);
@@ -316,21 +336,15 @@ const ExperimentSection = ({ experiment, group, lab, isRandom, onPreview }) => {
     finally { setUploading(false); e.target.value = ''; }
   };
 
-  // Create empty folder
   const handleCreateFolder = async (folderName) => {
     try {
-      const r = await axios.post('/api/files/create-folder', {
-        experimentId: experiment._id, group, lab, folderName
-      });
+      const r = await axios.post('/api/files/create-folder', { experimentId: experiment._id, group, lab, folderName });
       setFiles(prev => [r.data.file, ...prev]);
       setShowFolderModal(false);
       toast.success(`Folder "${folderName}" created!`);
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to create folder');
-    }
+    } catch (err) { toast.error(err.response?.data?.message || 'Failed to create folder'); }
   };
 
-  // Delete folder
   const handleFolderDelete = async (folderName) => {
     if (!window.confirm(`Delete folder "${folderName}" and all its files?`)) return;
     try {
@@ -340,100 +354,56 @@ const ExperimentSection = ({ experiment, group, lab, isRandom, onPreview }) => {
     } catch { toast.error('Failed to delete folder'); }
   };
 
-  // Files added to a folder
   const handleFilesAdded = (folderName, newFiles) => {
     setFiles(prev => [...newFiles, ...prev.filter(f => !(f.folderName === folderName && f.isFolder))]);
   };
 
   const handleLike = async (id) => {
-    try {
-      const r = await axios.post(`/api/files/${id}/like`);
-      setFiles(prev => prev.map(f => f._id === id ? { ...f, likes: r.data.likes } : f));
-    } catch {}
+    try { const r = await axios.post(`/api/files/${id}/like`); setFiles(prev => prev.map(f => f._id === id ? { ...f, likes: r.data.likes } : f)); } catch {}
   };
-
   const handleDislike = async (id) => {
-    try {
-      const r = await axios.post(`/api/files/${id}/dislike`);
-      setFiles(prev => prev.map(f => f._id === id ? { ...f, dislikes: r.data.dislikes, isFlagged: r.data.isFlagged } : f));
-    } catch {}
+    try { const r = await axios.post(`/api/files/${id}/dislike`); setFiles(prev => prev.map(f => f._id === id ? { ...f, dislikes: r.data.dislikes, isFlagged: r.data.isFlagged } : f)); } catch {}
   };
-
   const handleDelete = async (id) => {
     if (!window.confirm('Delete this file?')) return;
-    try {
-      await axios.delete(`/api/files/${id}`);
-      setFiles(prev => prev.filter(f => f._id !== id));
-      toast.success('Deleted');
-    } catch { toast.error('Failed'); }
+    try { await axios.delete(`/api/files/${id}`); setFiles(prev => prev.filter(f => f._id !== id)); toast.success('Deleted'); }
+    catch { toast.error('Failed'); }
   };
 
   return (
-    <div className="bg-zinc-900/40 border border-white/5 rounded-[2.5rem] p-8 backdrop-blur-sm">
-      {showFolderModal && (
-        <CreateFolderModal onConfirm={handleCreateFolder} onClose={() => setShowFolderModal(false)} />
-      )}
+    <div className="bg-zinc-900/40 border border-white/5 rounded-[2rem] p-6 backdrop-blur-sm">
+      {showFolderModal && <CreateFolderModal onConfirm={handleCreateFolder} onClose={() => setShowFolderModal(false)} />}
 
-      {/* Experiment header */}
-      <div className="flex items-center justify-between mb-8 border-b border-white/5 pb-6">
-        <button onClick={() => setOpen(!open)} className="flex items-center gap-4 text-left">
-          <div className={`w-3 h-3 rounded-full shadow-[0_0_10px_currentColor] ${isRandom ? 'text-[#00c2ff] bg-[#00c2ff]' : 'text-[#ff6b00] bg-[#ff6b00]'}`} />
-          <h4 className="text-2xl font-black uppercase tracking-tight">{experiment.title}</h4>
-          <span className="text-zinc-600 text-sm">{open ? '▾' : '▸'}</span>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6 border-b border-white/5 pb-5">
+        <button onClick={() => setOpen(!open)} className="flex items-center gap-3 text-left">
+          <div className={`w-2.5 h-2.5 rounded-full shadow-[0_0_8px_currentColor] ${isRandom ? 'text-[#00c2ff] bg-[#00c2ff]' : 'text-[#ff6b00] bg-[#ff6b00]'}`} />
+          <h4 className="text-lg font-black uppercase tracking-tight">{experiment.title}</h4>
+          <span className="text-zinc-600 text-xs">{open ? '▾' : '▸'}</span>
         </button>
-
-        <UploadMenu
-          uploading={uploading}
-          onSingleFile={handleSingleUpload}
-          onFolderUpload={handleFolderUpload}
-          onCreateFolder={() => setShowFolderModal(true)}
-        />
+        <UploadMenu uploading={uploading} onSingleFile={handleSingleUpload} onFolderUpload={handleFolderUpload} onCreateFolder={() => setShowFolderModal(true)} />
       </div>
 
       {open && (
-        <div className="space-y-6">
-          {/* Root files */}
-          {rootFiles.length > 0 && (
-            <div>
-              <p className="text-[10px] font-black text-zinc-600 uppercase tracking-[0.2em] mb-4">Files</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {rootFiles.map(f => (
-                  <FileCard key={f._id} file={f} onLike={handleLike} onDislike={handleDislike} onDelete={handleDelete} onPreview={onPreview} />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Folders */}
-          {folderNames.length > 0 && (
-            <div>
-              {rootFiles.length > 0 && <div className="border-t border-white/5 my-4" />}
-              <p className="text-[10px] font-black text-zinc-600 uppercase tracking-[0.2em] mb-4">Folders</p>
-              <div className="space-y-4">
-                {folderNames.map(fn => (
-                  <FolderSection
-                    key={fn}
-                    folderName={fn}
-                    files={folderMap[fn]}
-                    experimentId={experiment._id}
-                    group={group}
-                    lab={lab}
-                    onLike={handleLike}
-                    onDislike={handleDislike}
-                    onDelete={handleDelete}
-                    onPreview={onPreview}
-                    onFolderDelete={handleFolderDelete}
-                    onFilesAdded={handleFilesAdded}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Empty state */}
-          {rootFiles.length === 0 && folderNames.length === 0 && (
-            <div className="py-16 text-center border-2 border-dashed border-white/5 rounded-[2rem] text-zinc-700 font-black uppercase tracking-widest text-xs">
+        <div>
+          {rootFiles.length === 0 && folderNames.length === 0 ? (
+            <div className="py-12 text-center border-2 border-dashed border-white/5 rounded-[1.5rem] text-zinc-700 font-black uppercase tracking-widest text-[10px]">
               No Files Yet — Use Upload Menu Above
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+              {/* Folder cards first */}
+              {folderNames.map(fn => (
+                <FolderCard key={fn} folderName={fn} files={folderMap[fn]}
+                  experimentId={experiment._id} group={group} lab={lab}
+                  onLike={handleLike} onDislike={handleDislike} onDelete={handleDelete} onPreview={onPreview}
+                  onFolderDelete={handleFolderDelete} onFilesAdded={handleFilesAdded}
+                />
+              ))}
+              {/* Then root files */}
+              {rootFiles.map(f => (
+                <FileCard key={f._id} file={f} onLike={handleLike} onDislike={handleDislike} onDelete={handleDelete} onPreview={onPreview} />
+              ))}
             </div>
           )}
         </div>
@@ -442,7 +412,7 @@ const ExperimentSection = ({ experiment, group, lab, isRandom, onPreview }) => {
   );
 };
 
-// ─── Repository Page ─────────────────────────────────────────────────────────
+// ─── Repository Page ──────────────────────────────────────────────────────────
 const RepositoryPage = ({ navigate, group, lab }) => {
   const [experiments, setExperiments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -476,65 +446,60 @@ const RepositoryPage = ({ navigate, group, lab }) => {
 
   const deleteExp = async (id) => {
     if (!window.confirm('Delete this experiment and all its files?')) return;
-    try {
-      await axios.delete(`/api/experiments/${id}`);
-      setExperiments(prev => prev.filter(e => e._id !== id));
-      toast.success('Deleted');
-    } catch { toast.error('Failed'); }
+    try { await axios.delete(`/api/experiments/${id}`); setExperiments(prev => prev.filter(e => e._id !== id)); toast.success('Deleted'); }
+    catch { toast.error('Failed'); }
   };
 
   const CreateForm = ({ isRandom, onClose }) => (
-    <div className="bg-zinc-900/80 border border-[#ff6b00]/40 rounded-[2rem] p-8 mb-8 animate-fade-in">
-      <h3 className="text-white font-black mb-4 uppercase text-sm tracking-widest">{isRandom ? 'New Random Experiment' : 'New Experiment Header'}</h3>
+    <div className="bg-zinc-900/80 border border-[#ff6b00]/30 rounded-[1.5rem] p-6 mb-6">
+      <h3 className="text-white font-black mb-3 uppercase text-xs tracking-widest">{isRandom ? 'New Random Experiment' : 'New Experiment Header'}</h3>
       <input value={newTitle} onChange={e => setNewTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && createExp(isRandom)}
         placeholder="e.g. Experiment 1: Introduction to SQL"
-        className="w-full bg-black border border-white/10 rounded-2xl px-6 py-4 mb-4 outline-none text-white font-bold focus:border-[#ff6b00] transition-all" autoFocus />
-      <div className="flex gap-3">
+        className="w-full bg-black border border-white/10 rounded-2xl px-5 py-3 mb-3 outline-none text-white font-bold focus:border-[#ff6b00] transition-all text-sm" autoFocus />
+      <div className="flex gap-2">
         <button onClick={() => createExp(isRandom)} disabled={creating}
-          className="bg-white text-black px-6 py-2.5 rounded-full font-black text-sm uppercase tracking-wider hover:bg-zinc-200 transition-colors disabled:opacity-50">
+          className="bg-white text-black px-5 py-2 rounded-full font-black text-xs uppercase tracking-wider hover:bg-zinc-200 transition-colors disabled:opacity-50">
           {creating ? 'Creating...' : 'Create'}
         </button>
-        <button onClick={onClose} className="bg-white/5 text-white px-6 py-2.5 rounded-full font-black text-sm uppercase tracking-wider hover:bg-white/10 transition-colors">Cancel</button>
+        <button onClick={onClose} className="bg-white/5 text-white px-5 py-2 rounded-full font-black text-xs uppercase tracking-wider hover:bg-white/10 transition-colors">Cancel</button>
       </div>
     </div>
   );
 
   return (
-    <div className="min-h-screen p-8 pt-32 max-w-7xl mx-auto animate-fade-in">
+    <div className="min-h-screen p-8 pt-28 max-w-7xl mx-auto">
       {previewFile && <PreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />}
-
-      <button onClick={() => navigate('group_select')} className="flex items-center gap-2 text-zinc-500 hover:text-white mb-8 text-xs font-black uppercase tracking-widest transition-all group">
-        <div className="w-8 h-8 rounded-full border border-white/5 flex items-center justify-center group-hover:bg-white/5"><ArrowLeft className="w-4 h-4" /></div>
-        Back to Selection
+      <button onClick={() => navigate('group_select')} className="flex items-center gap-2 text-zinc-500 hover:text-white mb-6 text-xs font-black uppercase tracking-widest transition-all group">
+        <div className="w-7 h-7 rounded-full border border-white/5 flex items-center justify-center group-hover:bg-white/5"><ArrowLeft className="w-3.5 h-3.5" /></div>
+        Back
       </button>
 
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
-        <h2 className="text-5xl font-black tracking-tighter uppercase">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-10">
+        <h2 className="text-4xl font-black tracking-tighter uppercase">
           Group {group} <span className="text-zinc-800">/</span> <span className="text-[#ff6b00]">{lab}</span>
         </h2>
         <button onClick={() => { setShowForm(true); setShowRandomForm(false); setNewTitle(''); }}
-          className="flex items-center gap-2 bg-white text-black px-6 py-3 rounded-full font-black hover:bg-zinc-200 transition-colors shadow-lg text-sm uppercase tracking-wider">
-          <Plus className="w-4 h-4" /> Create Header
+          className="flex items-center gap-2 bg-white text-black px-5 py-2.5 rounded-full font-black hover:bg-zinc-200 transition-colors shadow-lg text-xs uppercase tracking-wider">
+          <Plus className="w-3.5 h-3.5" /> Create Header
         </button>
       </div>
 
       {showForm && <CreateForm isRandom={false} onClose={() => setShowForm(false)} />}
 
-      {/* Regular Experiments */}
-      <section className="mb-16">
-        <h3 className="text-[10px] font-black text-zinc-600 uppercase tracking-[0.2em] mb-6">Course Experiments</h3>
+      <section className="mb-12">
+        <h3 className="text-[10px] font-black text-zinc-600 uppercase tracking-[0.2em] mb-5">Course Experiments</h3>
         {loading ? (
-          <div className="text-zinc-600 font-black uppercase tracking-widest text-xs text-center py-20">Loading...</div>
+          <div className="text-zinc-600 font-black uppercase tracking-widest text-xs text-center py-16">Loading...</div>
         ) : regular.length === 0 ? (
-          <div className="py-20 text-center border-2 border-dashed border-white/5 rounded-[2rem] text-zinc-700 font-black uppercase tracking-widest text-xs">
-            No Experiments Yet — Click "Create Header" to add one
+          <div className="py-16 text-center border-2 border-dashed border-white/5 rounded-[2rem] text-zinc-700 font-black uppercase tracking-widest text-xs">
+            No Experiments Yet — Click "Create Header"
           </div>
         ) : (
-          <div className="space-y-8">
+          <div className="space-y-6">
             {regular.map(exp => (
               <div key={exp._id} className="relative">
-                <button onClick={() => deleteExp(exp._id)} className="absolute top-6 right-6 z-10 w-8 h-8 bg-black/40 border border-white/5 text-zinc-600 hover:text-red-400 rounded-xl flex items-center justify-center transition-colors">
-                  <Trash2 className="w-4 h-4" />
+                <button onClick={() => deleteExp(exp._id)} className="absolute top-5 right-5 z-10 w-7 h-7 bg-black/40 border border-white/5 text-zinc-600 hover:text-red-400 rounded-xl flex items-center justify-center transition-colors">
+                  <Trash2 className="w-3.5 h-3.5" />
                 </button>
                 <ExperimentSection experiment={exp} group={group} lab={lab} isRandom={false} onPreview={setPreviewFile} />
               </div>
@@ -543,28 +508,25 @@ const RepositoryPage = ({ navigate, group, lab }) => {
         )}
       </section>
 
-      {/* Random Experiments */}
       <section>
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-5">
           <h3 className="text-[10px] font-black text-zinc-600 uppercase tracking-[0.2em]">Random Experiments</h3>
           <button onClick={() => { setShowRandomForm(true); setShowForm(false); setNewTitle(''); }}
-            className="flex items-center gap-2 bg-[#00c2ff]/10 text-[#00c2ff] border border-[#00c2ff]/20 px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-widest hover:bg-[#00c2ff]/20 transition-colors">
+            className="flex items-center gap-1.5 bg-[#00c2ff]/10 text-[#00c2ff] border border-[#00c2ff]/20 px-3 py-1.5 rounded-full font-black text-[10px] uppercase tracking-widest hover:bg-[#00c2ff]/20 transition-colors">
             <Plus className="w-3 h-3" /> Add Random
           </button>
         </div>
-
         {showRandomForm && <CreateForm isRandom={true} onClose={() => setShowRandomForm(false)} />}
-
         {random.length === 0 ? (
-          <div className="py-16 text-center border-2 border-dashed border-white/5 rounded-[2rem] text-zinc-700 font-black uppercase tracking-widest text-xs">
+          <div className="py-12 text-center border-2 border-dashed border-white/5 rounded-[2rem] text-zinc-700 font-black uppercase tracking-widest text-xs">
             No Random Experiments Yet
           </div>
         ) : (
-          <div className="space-y-8">
+          <div className="space-y-6">
             {random.map(exp => (
               <div key={exp._id} className="relative">
-                <button onClick={() => deleteExp(exp._id)} className="absolute top-6 right-6 z-10 w-8 h-8 bg-black/40 border border-white/5 text-zinc-600 hover:text-red-400 rounded-xl flex items-center justify-center transition-colors">
-                  <Trash2 className="w-4 h-4" />
+                <button onClick={() => deleteExp(exp._id)} className="absolute top-5 right-5 z-10 w-7 h-7 bg-black/40 border border-white/5 text-zinc-600 hover:text-red-400 rounded-xl flex items-center justify-center transition-colors">
+                  <Trash2 className="w-3.5 h-3.5" />
                 </button>
                 <ExperimentSection experiment={exp} group={group} lab={lab} isRandom={true} onPreview={setPreviewFile} />
               </div>
