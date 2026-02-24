@@ -4,28 +4,30 @@ import toast from 'react-hot-toast';
 import {
   ArrowLeft, Plus, Folder, FolderOpen, Download, ThumbsUp, ThumbsDown,
   AlertTriangle, Trash2, Eye, Upload, FolderPlus, FolderUp, X,
-  ChevronDown, ChevronRight, File as FileIcon, ArrowDownToLine, User, Wifi
+  ChevronDown, ChevronRight, File as FileIcon, ArrowDownToLine, User, Monitor
 } from 'lucide-react';
 import { isImage, PreviewModal } from './PreviewModal';
 
-// ─── IP color palette — each unique IP gets a distinct color ─────────────────
-const IP_COLORS = [
-  { accent: '#ff6b00', bg: 'rgba(255,107,0,0.08)', border: 'rgba(255,107,0,0.25)', dot: '#ff6b00' },
-  { accent: '#00c2ff', bg: 'rgba(0,194,255,0.08)', border: 'rgba(0,194,255,0.25)', dot: '#00c2ff' },
-  { accent: '#00ff8c', bg: 'rgba(0,255,140,0.08)', border: 'rgba(0,255,140,0.25)', dot: '#00ff8c' },
-  { accent: '#a855f7', bg: 'rgba(168,85,247,0.08)', border: 'rgba(168,85,247,0.25)', dot: '#a855f7' },
-  { accent: '#f59e0b', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.25)', dot: '#f59e0b' },
-  { accent: '#ec4899', bg: 'rgba(236,72,153,0.08)', border: 'rgba(236,72,153,0.25)', dot: '#ec4899' },
-];
-const getIpColor = (index) => IP_COLORS[index % IP_COLORS.length];
-
-// Short display of IP — show last 2 octets for privacy but keep it identifiable
-const formatIp = (ip) => {
-  if (!ip || ip === 'unknown') return 'Unknown Device';
-  const parts = ip.replace('::ffff:', '').split('.');
-  if (parts.length === 4) return `${parts[0]}.${parts[1]}.*.*`;
-  return ip.length > 20 ? ip.substring(0, 20) + '…' : ip;
+// ─── Get or create a stable browser device ID ────────────────────────────────
+const getDeviceId = () => {
+  let id = localStorage.getItem('adamvilla_device_id');
+  if (!id) {
+    id = 'dev_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 9);
+    localStorage.setItem('adamvilla_device_id', id);
+  }
+  return id;
 };
+
+// ─── IP color palette ─────────────────────────────────────────────────────────
+const IP_COLORS = [
+  { accent: '#ff6b00', bg: 'rgba(255,107,0,0.07)', border: 'rgba(255,107,0,0.2)', dot: '#ff6b00' },
+  { accent: '#00c2ff', bg: 'rgba(0,194,255,0.07)', border: 'rgba(0,194,255,0.2)', dot: '#00c2ff' },
+  { accent: '#00ff8c', bg: 'rgba(0,255,140,0.07)', border: 'rgba(0,255,140,0.2)', dot: '#00ff8c' },
+  { accent: '#a855f7', bg: 'rgba(168,85,247,0.07)', border: 'rgba(168,85,247,0.2)', dot: '#a855f7' },
+  { accent: '#f59e0b', bg: 'rgba(245,158,11,0.07)', border: 'rgba(245,158,11,0.2)', dot: '#f59e0b' },
+  { accent: '#ec4899', bg: 'rgba(236,72,153,0.07)', border: 'rgba(236,72,153,0.2)', dot: '#ec4899' },
+];
+const getColor = (index) => IP_COLORS[index % IP_COLORS.length];
 
 // ─── Small File Card ──────────────────────────────────────────────────────────
 const FileCard = ({ file, onLike, onDislike, onDelete, onPreview, compact = false }) => {
@@ -102,13 +104,14 @@ const FolderCard = ({ folderName, files, experimentId, group, lab, onLike, onDis
     if (!selectedFiles.length) return;
     if (selectedFiles.find(f => f.size > 40 * 1024 * 1024)) return toast.error('Max 40MB per file!');
     setUploading(true);
+    const deviceId = getDeviceId();
     try {
       const results = [];
       for (const file of selectedFiles) {
         const fd = new FormData();
         fd.append('file', file); fd.append('experimentId', experimentId);
         fd.append('group', group); fd.append('lab', lab);
-        fd.append('folderName', folderName);
+        fd.append('folderName', folderName); fd.append('deviceId', deviceId);
         const r = await axios.post('/api/files/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
         results.push(r.data.file);
       }
@@ -191,14 +194,10 @@ const FolderCard = ({ folderName, files, experimentId, group, lab, onLike, onDis
             </div>
             <div style={{ flex: 1, overflow: 'auto', padding: '24px' }}>
               {realFiles.length === 0 ? (
-                <div className="py-20 text-center border-2 border-dashed border-white/5 rounded-[2rem] text-zinc-700 font-black uppercase tracking-widest text-xs">
-                  Empty Folder — Click "Add Files" to upload
-                </div>
+                <div className="py-20 text-center border-2 border-dashed border-white/5 rounded-[2rem] text-zinc-700 font-black uppercase tracking-widest text-xs">Empty Folder — Click "Add Files" to upload</div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                  {realFiles.map(f => (
-                    <FileCard key={f._id} file={f} compact onLike={onLike} onDislike={onDislike} onDelete={onDelete} onPreview={onPreview} />
-                  ))}
+                  {realFiles.map(f => <FileCard key={f._id} file={f} compact onLike={onLike} onDislike={onDislike} onDelete={onDelete} onPreview={onPreview} />)}
                 </div>
               )}
             </div>
@@ -209,13 +208,15 @@ const FolderCard = ({ folderName, files, experimentId, group, lab, onLike, onDis
   );
 };
 
-// ─── IP User Section — collapsible block per unique IP ────────────────────────
-const IpUserSection = ({ ip, userNumber, colorScheme, ipFiles, experimentId, group, lab, onLike, onDislike, onDelete, onPreview, onFolderDelete, onFilesAdded }) => {
+// ─── Device User Section — one collapsible block per unique deviceId ──────────
+const DeviceUserSection = ({ deviceId, userNumber, colorScheme, deviceFiles, experimentId, group, lab, onLike, onDislike, onDelete, onPreview, onFolderDelete, onFilesAdded }) => {
   const [open, setOpen] = useState(true);
+  const myDeviceId = getDeviceId();
+  const isMe = deviceId === myDeviceId;
 
-  const rootFiles = ipFiles.filter(f => !f.folderName && !f.isFolder);
+  const rootFiles = deviceFiles.filter(f => !f.folderName && !f.isFolder);
   const folderMap = {};
-  ipFiles.filter(f => f.folderName).forEach(f => {
+  deviceFiles.filter(f => f.folderName).forEach(f => {
     if (!folderMap[f.folderName]) folderMap[f.folderName] = [];
     folderMap[f.folderName].push(f);
   });
@@ -223,30 +224,31 @@ const IpUserSection = ({ ip, userNumber, colorScheme, ipFiles, experimentId, gro
   const totalItems = rootFiles.length + folderNames.length;
 
   return (
-    <div style={{ border: `1px solid ${colorScheme.border}`, borderRadius: '20px', overflow: 'hidden', background: colorScheme.bg, marginBottom: '12px' }}>
-      {/* IP Header bar */}
-      <button
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-5 py-3.5 text-left transition-all hover:brightness-110"
-        style={{ background: 'transparent' }}
-      >
+    <div style={{ border: `1px solid ${colorScheme.border}`, borderRadius: '18px', overflow: 'hidden', background: colorScheme.bg, marginBottom: '10px' }}>
+      {/* Header bar */}
+      <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between px-5 py-3 text-left hover:brightness-110 transition-all" style={{ background: 'transparent' }}>
         <div className="flex items-center gap-3">
           {/* Color dot */}
-          <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: colorScheme.dot, boxShadow: `0 0 8px ${colorScheme.dot}` }} />
+          <div style={{ width: '9px', height: '9px', borderRadius: '50%', background: colorScheme.dot, boxShadow: `0 0 6px ${colorScheme.dot}`, flexShrink: 0 }} />
+
           {/* User label */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', background: 'rgba(255,255,255,0.05)', border: `1px solid ${colorScheme.border}`, borderRadius: '999px', padding: '3px 10px' }}>
-              <User style={{ width: '10px', height: '10px', color: colorScheme.accent }} />
-              <span style={{ color: colorScheme.accent, fontWeight: 900, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px' }}>User {userNumber}</span>
-            </div>
-            {/* IP address display */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', opacity: 0.6 }}>
-              <Wifi style={{ width: '9px', height: '9px', color: '#666' }} />
-              <span style={{ color: '#555', fontWeight: 700, fontSize: '9px', fontFamily: 'monospace', letterSpacing: '0.5px' }} title={ip}>{formatIp(ip)}</span>
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.04)', border: `1px solid ${colorScheme.border}`, borderRadius: '999px', padding: '3px 10px' }}>
+            <User style={{ width: '9px', height: '9px', color: colorScheme.accent }} />
+            <span style={{ color: colorScheme.accent, fontWeight: 900, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+              User {userNumber}
+            </span>
           </div>
-          {/* File count badge */}
-          <span style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '999px', padding: '2px 8px', color: '#666', fontWeight: 900, fontSize: '9px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+
+          {/* "You" badge if this is the current browser */}
+          {isMe && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '999px', padding: '2px 8px' }}>
+              <Monitor style={{ width: '8px', height: '8px', color: '#aaa' }} />
+              <span style={{ color: '#aaa', fontWeight: 900, fontSize: '9px', textTransform: 'uppercase', letterSpacing: '1px' }}>This Device</span>
+            </div>
+          )}
+
+          {/* Item count */}
+          <span style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '999px', padding: '2px 8px', color: '#555', fontWeight: 900, fontSize: '9px', textTransform: 'uppercase', letterSpacing: '1px' }}>
             {totalItems} item{totalItems !== 1 ? 's' : ''}
           </span>
         </div>
@@ -255,7 +257,7 @@ const IpUserSection = ({ ip, userNumber, colorScheme, ipFiles, experimentId, gro
 
       {/* Files grid */}
       {open && (
-        <div style={{ padding: '4px 16px 16px' }}>
+        <div style={{ padding: '4px 14px 14px' }}>
           {totalItems === 0 ? (
             <div className="py-6 text-center text-zinc-700 font-black uppercase tracking-widest text-[9px]">No files</div>
           ) : (
@@ -284,21 +286,15 @@ const CreateFolderModal = ({ onConfirm, onClose }) => {
   return (
     <div onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', backdropFilter: 'blur(8px)' }}>
-      <div style={{ background: '#0d0d0d', border: '1px solid rgba(255,107,0,0.3)', borderRadius: '24px', padding: '32px', width: '100%', maxWidth: '400px', boxShadow: '0 0 60px rgba(255,107,0,0.1)' }}>
+      <div style={{ background: '#0d0d0d', border: '1px solid rgba(255,107,0,0.3)', borderRadius: '24px', padding: '32px', width: '100%', maxWidth: '400px' }}>
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-[#ff6b00]/15 rounded-xl flex items-center justify-center">
-              <FolderPlus className="w-4 h-4 text-[#ff6b00]" />
-            </div>
+            <div className="w-9 h-9 bg-[#ff6b00]/15 rounded-xl flex items-center justify-center"><FolderPlus className="w-4 h-4 text-[#ff6b00]" /></div>
             <h3 className="font-black text-white text-sm uppercase tracking-widest">New Folder</h3>
           </div>
-          <button onClick={onClose} className="w-7 h-7 rounded-xl bg-white/5 border border-white/10 text-zinc-500 hover:text-white flex items-center justify-center">
-            <X className="w-3.5 h-3.5" />
-          </button>
+          <button onClick={onClose} className="w-7 h-7 rounded-xl bg-white/5 border border-white/10 text-zinc-500 hover:text-white flex items-center justify-center"><X className="w-3.5 h-3.5" /></button>
         </div>
-        <p className="text-zinc-600 text-[10px] font-bold uppercase tracking-wider mb-3">Enter folder name</p>
-        <input value={name} onChange={e => setName(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && name.trim() && onConfirm(name.trim())}
+        <input value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === 'Enter' && name.trim() && onConfirm(name.trim())}
           placeholder="e.g. Group A Screenshots" autoFocus
           className="w-full bg-black border border-white/10 rounded-2xl px-5 py-3 mb-4 outline-none text-white font-bold focus:border-[#ff6b00] transition-all text-sm" />
         <div className="flex gap-3">
@@ -306,9 +302,7 @@ const CreateFolderModal = ({ onConfirm, onClose }) => {
             className="flex-1 bg-[#ff6b00] text-black px-6 py-2.5 rounded-full font-black text-xs uppercase tracking-wider hover:bg-[#ff9e00] transition-colors disabled:opacity-40 disabled:pointer-events-none">
             Create Folder
           </button>
-          <button onClick={onClose} className="bg-white/5 text-white px-5 py-2.5 rounded-full font-black text-xs uppercase tracking-wider hover:bg-white/10 transition-colors">
-            Cancel
-          </button>
+          <button onClick={onClose} className="bg-white/5 text-white px-5 py-2.5 rounded-full font-black text-xs uppercase tracking-wider hover:bg-white/10 transition-colors">Cancel</button>
         </div>
       </div>
     </div>
@@ -324,14 +318,11 @@ const UploadMenu = ({ onSingleFile, onFolderUpload, onCreateFolder, uploading })
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
   }, []);
-
   return (
     <div className="relative" ref={ref}>
       <button onClick={() => setOpen(!open)} disabled={uploading}
         className={`flex items-center gap-1.5 text-[10px] bg-white/5 hover:bg-white/10 text-white px-4 py-2 rounded-full font-black border border-white/10 tracking-widest uppercase transition-all ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
-        <Upload className="w-3 h-3" />
-        {uploading ? 'Uploading...' : 'Upload'}
-        <ChevronDown className="w-3 h-3" />
+        <Upload className="w-3 h-3" />{uploading ? 'Uploading...' : 'Upload'}<ChevronDown className="w-3 h-3" />
       </button>
       {open && (
         <div className="absolute right-0 top-full mt-2 w-48 bg-zinc-900 border border-white/10 rounded-2xl overflow-hidden shadow-2xl z-50">
@@ -369,13 +360,13 @@ const ExperimentSection = ({ experiment, group, lab, isRandom, onPreview }) => {
       .catch(() => {});
   }, [experiment._id]);
 
-  // Group all files by uploaderIp — maintain insertion order of IPs
-  const ipOrder = [];
-  const ipMap = {};
+  // Group by deviceId — maintain first-seen order
+  const deviceOrder = [];
+  const deviceMap = {};
   files.forEach(f => {
-    const ip = f.uploaderIp || 'unknown';
-    if (!ipMap[ip]) { ipMap[ip] = []; ipOrder.push(ip); }
-    ipMap[ip].push(f);
+    const key = f.deviceId && f.deviceId !== 'unknown' ? f.deviceId : (f.uploaderIp || 'unknown');
+    if (!deviceMap[key]) { deviceMap[key] = []; deviceOrder.push(key); }
+    deviceMap[key].push(f);
   });
 
   const handleSingleUpload = async (e) => {
@@ -386,6 +377,7 @@ const ExperimentSection = ({ experiment, group, lab, isRandom, onPreview }) => {
     const fd = new FormData();
     fd.append('file', file); fd.append('experimentId', experiment._id);
     fd.append('group', group); fd.append('lab', lab);
+    fd.append('deviceId', getDeviceId());
     try {
       const r = await axios.post('/api/files/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
       setFiles(prev => [...prev, r.data.file]);
@@ -406,6 +398,7 @@ const ExperimentSection = ({ experiment, group, lab, isRandom, onPreview }) => {
       selectedFiles.forEach(f => fd.append('files', f));
       fd.append('experimentId', experiment._id); fd.append('group', group);
       fd.append('lab', lab); fd.append('folderName', folderName);
+      fd.append('deviceId', getDeviceId());
       const r = await axios.post('/api/files/upload-folder', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
       setFiles(prev => [...prev.filter(f => !(f.folderName === folderName && f.isFolder)), ...(r.data.files || [])]);
       toast.success(`Folder "${folderName}" uploaded with ${r.data.files.length} file(s)!`);
@@ -415,7 +408,7 @@ const ExperimentSection = ({ experiment, group, lab, isRandom, onPreview }) => {
 
   const handleCreateFolder = async (folderName) => {
     try {
-      const r = await axios.post('/api/files/create-folder', { experimentId: experiment._id, group, lab, folderName });
+      const r = await axios.post('/api/files/create-folder', { experimentId: experiment._id, group, lab, folderName, deviceId: getDeviceId() });
       setFiles(prev => [...prev, r.data.file]);
       setShowFolderModal(false);
       toast.success(`Folder "${folderName}" created!`);
@@ -450,8 +443,6 @@ const ExperimentSection = ({ experiment, group, lab, isRandom, onPreview }) => {
   return (
     <div className="bg-zinc-900/40 border border-white/5 rounded-[2rem] p-6 backdrop-blur-sm">
       {showFolderModal && <CreateFolderModal onConfirm={handleCreateFolder} onClose={() => setShowFolderModal(false)} />}
-
-      {/* Experiment header */}
       <div className="flex items-center justify-between mb-5 border-b border-white/5 pb-5">
         <button onClick={() => setOpen(!open)} className="flex items-center gap-3 text-left">
           <div className={`w-2.5 h-2.5 rounded-full shadow-[0_0_8px_currentColor] ${isRandom ? 'text-[#00c2ff] bg-[#00c2ff]' : 'text-[#ff6b00] bg-[#ff6b00]'}`} />
@@ -463,31 +454,25 @@ const ExperimentSection = ({ experiment, group, lab, isRandom, onPreview }) => {
 
       {open && (
         <div>
-          {ipOrder.length === 0 ? (
+          {deviceOrder.length === 0 ? (
             <div className="py-12 text-center border-2 border-dashed border-white/5 rounded-[1.5rem] text-zinc-700 font-black uppercase tracking-widest text-[10px]">
               No Files Yet — Use Upload Menu Above
             </div>
           ) : (
-            <div>
-              {ipOrder.map((ip, idx) => (
-                <IpUserSection
-                  key={ip}
-                  ip={ip}
-                  userNumber={idx + 1}
-                  colorScheme={getIpColor(idx)}
-                  ipFiles={ipMap[ip]}
-                  experimentId={experiment._id}
-                  group={group}
-                  lab={lab}
-                  onLike={handleLike}
-                  onDislike={handleDislike}
-                  onDelete={handleDelete}
-                  onPreview={onPreview}
-                  onFolderDelete={handleFolderDelete}
-                  onFilesAdded={handleFilesAdded}
-                />
-              ))}
-            </div>
+            deviceOrder.map((key, idx) => (
+              <DeviceUserSection
+                key={key}
+                deviceId={key}
+                userNumber={idx + 1}
+                colorScheme={getColor(idx)}
+                deviceFiles={deviceMap[key]}
+                experimentId={experiment._id}
+                group={group} lab={lab}
+                onLike={handleLike} onDislike={handleDislike}
+                onDelete={handleDelete} onPreview={onPreview}
+                onFolderDelete={handleFolderDelete} onFilesAdded={handleFilesAdded}
+              />
+            ))
           )}
         </div>
       )}
@@ -556,7 +541,6 @@ const RepositoryPage = ({ navigate, group, lab }) => {
         <div className="w-7 h-7 rounded-full border border-white/5 flex items-center justify-center group-hover:bg-white/5"><ArrowLeft className="w-3.5 h-3.5" /></div>
         Back
       </button>
-
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-10">
         <h2 className="text-4xl font-black tracking-tighter uppercase">
           Group {group} <span className="text-zinc-800">/</span> <span className="text-[#ff6b00]">{lab}</span>
@@ -574,9 +558,7 @@ const RepositoryPage = ({ navigate, group, lab }) => {
         {loading ? (
           <div className="text-zinc-600 font-black uppercase tracking-widest text-xs text-center py-16">Loading...</div>
         ) : regular.length === 0 ? (
-          <div className="py-16 text-center border-2 border-dashed border-white/5 rounded-[2rem] text-zinc-700 font-black uppercase tracking-widest text-xs">
-            No Experiments Yet — Click "Create Header"
-          </div>
+          <div className="py-16 text-center border-2 border-dashed border-white/5 rounded-[2rem] text-zinc-700 font-black uppercase tracking-widest text-xs">No Experiments Yet — Click "Create Header"</div>
         ) : (
           <div className="space-y-6">
             {regular.map(exp => (
@@ -601,9 +583,7 @@ const RepositoryPage = ({ navigate, group, lab }) => {
         </div>
         {showRandomForm && <CreateForm isRandom={true} onClose={() => setShowRandomForm(false)} />}
         {random.length === 0 ? (
-          <div className="py-12 text-center border-2 border-dashed border-white/5 rounded-[2rem] text-zinc-700 font-black uppercase tracking-widest text-xs">
-            No Random Experiments Yet
-          </div>
+          <div className="py-12 text-center border-2 border-dashed border-white/5 rounded-[2rem] text-zinc-700 font-black uppercase tracking-widest text-xs">No Random Experiments Yet</div>
         ) : (
           <div className="space-y-6">
             {random.map(exp => (
