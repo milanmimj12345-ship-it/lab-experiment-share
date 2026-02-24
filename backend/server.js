@@ -158,41 +158,47 @@ app.get('/api/image-proxy', async (req, res) => {
   }
 });
 
-// Gemini AI proxy - calls Gemini from backend to protect API key and avoid quota issues
+// Groq AI proxy - calls Groq (free tier, generous limits) from backend
 app.post('/api/ai-analyze', async (req, res) => {
   try {
     const { imageUrl, prompt } = req.body;
     if (!imageUrl || !prompt) return res.status(400).json({ error: 'imageUrl and prompt required' });
 
-    const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-    if (!GEMINI_API_KEY) return res.status(500).json({ error: 'Gemini API key not configured on server' });
+    const GROQ_API_KEY = process.env.GROQ_API_KEY;
+    if (!GROQ_API_KEY) return res.status(500).json({ error: 'Groq API key not configured on server' });
 
-    // Fetch image
+    // Fetch image and convert to base64
     const imgResponse = await fetch(imageUrl);
     const buffer = await imgResponse.arrayBuffer();
     const base64 = Buffer.from(buffer).toString('base64');
     const mimeType = imgResponse.headers.get('content-type') || 'image/jpeg';
 
-    // Call Gemini
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+    // Call Groq vision model
+    const groqRes = await fetch(
+      'https://api.groq.com/openai/v1/chat/completions',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${GROQ_API_KEY}`
+        },
         body: JSON.stringify({
-          contents: [{
-            parts: [
-              { text: prompt },
-              { inline_data: { mime_type: mimeType, data: base64 } }
+          model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'text', text: prompt },
+              { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64}` } }
             ]
-          }]
+          }],
+          max_tokens: 2000
         })
       }
     );
 
-    const data = await geminiRes.json();
+    const data = await groqRes.json();
     if (data.error) return res.status(429).json({ error: data.error.message });
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'No content extracted.';
+    const text = data?.choices?.[0]?.message?.content || 'No content extracted.';
     res.json({ success: true, text });
   } catch (err) {
     res.status(500).json({ error: err.message });
