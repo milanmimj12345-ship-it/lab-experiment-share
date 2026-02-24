@@ -12,7 +12,13 @@ const fileSchema = new mongoose.Schema({
   lab: { type: String, enum: ['DBMS', 'OS'], required: true },
   uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   uploaderIp: { type: String, default: 'unknown' },
-  deviceId: { type: String, default: 'unknown' }, // browser-generated stable ID — used for grouping
+  deviceId: { type: String, default: 'unknown' }, // = uploaderName.toLowerCase() — used for grouping
+  uploaderName: { type: String, default: 'Unknown' }, // display name entered by user
+  likes: { type: Number, default: 0 },
+  dislikes: { type: Number, default: 0 },
+  isFlagged: { type: Boolean, default: false },
+  folderName: { type: String, default: null },
+  isFolder: { type: Boolean, default: false },
 }, { timestamps: true });
 
 module.exports = mongoose.model('File', fileSchema);
