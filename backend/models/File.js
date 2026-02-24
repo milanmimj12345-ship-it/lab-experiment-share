@@ -11,11 +11,12 @@ const fileSchema = new mongoose.Schema({
   group: { type: String, enum: ['A', 'B'], required: true },
   lab: { type: String, enum: ['DBMS', 'OS'], required: true },
   uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  uploaderIp: { type: String, default: 'unknown' }, // IP address of uploader
   likes: { type: Number, default: 0 },
   dislikes: { type: Number, default: 0 },
   isFlagged: { type: Boolean, default: false },
-  folderName: { type: String, default: null }, // null = root level, string = inside this folder
-  isFolder: { type: Boolean, default: false }, // true = empty folder marker
+  folderName: { type: String, default: null },
+  isFolder: { type: Boolean, default: false },
 }, { timestamps: true });
 
 module.exports = mongoose.model('File', fileSchema);

@@ -4,9 +4,28 @@ import toast from 'react-hot-toast';
 import {
   ArrowLeft, Plus, Folder, FolderOpen, Download, ThumbsUp, ThumbsDown,
   AlertTriangle, Trash2, Eye, Upload, FolderPlus, FolderUp, X,
-  ChevronDown, ChevronRight, File as FileIcon, ArrowDownToLine
+  ChevronDown, ChevronRight, File as FileIcon, ArrowDownToLine, User, Wifi
 } from 'lucide-react';
 import { isImage, PreviewModal } from './PreviewModal';
+
+// ─── IP color palette — each unique IP gets a distinct color ─────────────────
+const IP_COLORS = [
+  { accent: '#ff6b00', bg: 'rgba(255,107,0,0.08)', border: 'rgba(255,107,0,0.25)', dot: '#ff6b00' },
+  { accent: '#00c2ff', bg: 'rgba(0,194,255,0.08)', border: 'rgba(0,194,255,0.25)', dot: '#00c2ff' },
+  { accent: '#00ff8c', bg: 'rgba(0,255,140,0.08)', border: 'rgba(0,255,140,0.25)', dot: '#00ff8c' },
+  { accent: '#a855f7', bg: 'rgba(168,85,247,0.08)', border: 'rgba(168,85,247,0.25)', dot: '#a855f7' },
+  { accent: '#f59e0b', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.25)', dot: '#f59e0b' },
+  { accent: '#ec4899', bg: 'rgba(236,72,153,0.08)', border: 'rgba(236,72,153,0.25)', dot: '#ec4899' },
+];
+const getIpColor = (index) => IP_COLORS[index % IP_COLORS.length];
+
+// Short display of IP — show last 2 octets for privacy but keep it identifiable
+const formatIp = (ip) => {
+  if (!ip || ip === 'unknown') return 'Unknown Device';
+  const parts = ip.replace('::ffff:', '').split('.');
+  if (parts.length === 4) return `${parts[0]}.${parts[1]}.*.*`;
+  return ip.length > 20 ? ip.substring(0, 20) + '…' : ip;
+};
 
 // ─── Small File Card ──────────────────────────────────────────────────────────
 const FileCard = ({ file, onLike, onDislike, onDelete, onPreview, compact = false }) => {
@@ -72,7 +91,7 @@ const FileCard = ({ file, onLike, onDislike, onDelete, onPreview, compact = fals
   );
 };
 
-// ─── Folder Card (looks like a file card) ────────────────────────────────────
+// ─── Folder Card ──────────────────────────────────────────────────────────────
 const FolderCard = ({ folderName, files, experimentId, group, lab, onLike, onDislike, onDelete, onPreview, onFolderDelete, onFilesAdded }) => {
   const [open, setOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -87,10 +106,8 @@ const FolderCard = ({ folderName, files, experimentId, group, lab, onLike, onDis
       const results = [];
       for (const file of selectedFiles) {
         const fd = new FormData();
-        fd.append('file', file);
-        fd.append('experimentId', experimentId);
-        fd.append('group', group);
-        fd.append('lab', lab);
+        fd.append('file', file); fd.append('experimentId', experimentId);
+        fd.append('group', group); fd.append('lab', lab);
         fd.append('folderName', folderName);
         const r = await axios.post('/api/files/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
         results.push(r.data.file);
@@ -120,7 +137,6 @@ const FolderCard = ({ folderName, files, experimentId, group, lab, onLike, onDis
 
   return (
     <>
-      {/* Folder card — same size as file card */}
       <div className="relative bg-black/50 border border-white/8 rounded-2xl p-4 h-44 flex flex-col justify-between group transition-all hover:border-[#ff6b00]/40 shadow-lg cursor-pointer"
         onClick={() => setOpen(true)}>
         <div>
@@ -146,14 +162,10 @@ const FolderCard = ({ folderName, files, experimentId, group, lab, onLike, onDis
         </div>
       </div>
 
-      {/* Folder modal — opens when clicked */}
       {open && (
-        <div
-          onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}
+        <div onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', backdropFilter: 'blur(10px)' }}>
           <div style={{ background: '#0a0a0a', border: '1px solid rgba(255,107,0,0.2)', borderRadius: '28px', width: '100%', maxWidth: '1000px', maxHeight: '88vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 0 80px rgba(0,0,0,0.9)' }}>
-
-            {/* Modal header */}
             <div style={{ padding: '20px 24px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-[#ff6b00]/15 rounded-xl flex items-center justify-center">
@@ -165,8 +177,7 @@ const FolderCard = ({ folderName, files, experimentId, group, lab, onLike, onDis
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={downloadFolder}
-                  className="flex items-center gap-2 px-4 py-2 bg-[#ff6b00]/10 border border-[#ff6b00]/30 text-[#ff6b00] rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-[#ff6b00]/20 transition-all">
+                <button onClick={downloadFolder} className="flex items-center gap-2 px-4 py-2 bg-[#ff6b00]/10 border border-[#ff6b00]/30 text-[#ff6b00] rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-[#ff6b00]/20 transition-all">
                   <ArrowDownToLine className="w-3 h-3" /> Download All
                 </button>
                 <label className={`flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 text-white rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all cursor-pointer ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
@@ -178,8 +189,6 @@ const FolderCard = ({ folderName, files, experimentId, group, lab, onLike, onDis
                 </button>
               </div>
             </div>
-
-            {/* Files grid inside folder */}
             <div style={{ flex: 1, overflow: 'auto', padding: '24px' }}>
               {realFiles.length === 0 ? (
                 <div className="py-20 text-center border-2 border-dashed border-white/5 rounded-[2rem] text-zinc-700 font-black uppercase tracking-widest text-xs">
@@ -188,9 +197,7 @@ const FolderCard = ({ folderName, files, experimentId, group, lab, onLike, onDis
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                   {realFiles.map(f => (
-                    <FileCard key={f._id} file={f} compact
-                      onLike={onLike} onDislike={onDislike} onDelete={onDelete} onPreview={onPreview}
-                    />
+                    <FileCard key={f._id} file={f} compact onLike={onLike} onDislike={onDislike} onDelete={onDelete} onPreview={onPreview} />
                   ))}
                 </div>
               )}
@@ -199,6 +206,75 @@ const FolderCard = ({ folderName, files, experimentId, group, lab, onLike, onDis
         </div>
       )}
     </>
+  );
+};
+
+// ─── IP User Section — collapsible block per unique IP ────────────────────────
+const IpUserSection = ({ ip, userNumber, colorScheme, ipFiles, experimentId, group, lab, onLike, onDislike, onDelete, onPreview, onFolderDelete, onFilesAdded }) => {
+  const [open, setOpen] = useState(true);
+
+  const rootFiles = ipFiles.filter(f => !f.folderName && !f.isFolder);
+  const folderMap = {};
+  ipFiles.filter(f => f.folderName).forEach(f => {
+    if (!folderMap[f.folderName]) folderMap[f.folderName] = [];
+    folderMap[f.folderName].push(f);
+  });
+  const folderNames = Object.keys(folderMap);
+  const totalItems = rootFiles.length + folderNames.length;
+
+  return (
+    <div style={{ border: `1px solid ${colorScheme.border}`, borderRadius: '20px', overflow: 'hidden', background: colorScheme.bg, marginBottom: '12px' }}>
+      {/* IP Header bar */}
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-5 py-3.5 text-left transition-all hover:brightness-110"
+        style={{ background: 'transparent' }}
+      >
+        <div className="flex items-center gap-3">
+          {/* Color dot */}
+          <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: colorScheme.dot, boxShadow: `0 0 8px ${colorScheme.dot}` }} />
+          {/* User label */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', background: 'rgba(255,255,255,0.05)', border: `1px solid ${colorScheme.border}`, borderRadius: '999px', padding: '3px 10px' }}>
+              <User style={{ width: '10px', height: '10px', color: colorScheme.accent }} />
+              <span style={{ color: colorScheme.accent, fontWeight: 900, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px' }}>User {userNumber}</span>
+            </div>
+            {/* IP address display */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', opacity: 0.6 }}>
+              <Wifi style={{ width: '9px', height: '9px', color: '#666' }} />
+              <span style={{ color: '#555', fontWeight: 700, fontSize: '9px', fontFamily: 'monospace', letterSpacing: '0.5px' }} title={ip}>{formatIp(ip)}</span>
+            </div>
+          </div>
+          {/* File count badge */}
+          <span style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '999px', padding: '2px 8px', color: '#666', fontWeight: 900, fontSize: '9px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+            {totalItems} item{totalItems !== 1 ? 's' : ''}
+          </span>
+        </div>
+        <span style={{ color: '#444', fontSize: '11px' }}>{open ? '▾' : '▸'}</span>
+      </button>
+
+      {/* Files grid */}
+      {open && (
+        <div style={{ padding: '4px 16px 16px' }}>
+          {totalItems === 0 ? (
+            <div className="py-6 text-center text-zinc-700 font-black uppercase tracking-widest text-[9px]">No files</div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+              {folderNames.map(fn => (
+                <FolderCard key={fn} folderName={fn} files={folderMap[fn]}
+                  experimentId={experimentId} group={group} lab={lab}
+                  onLike={onLike} onDislike={onDislike} onDelete={onDelete} onPreview={onPreview}
+                  onFolderDelete={onFolderDelete} onFilesAdded={onFilesAdded}
+                />
+              ))}
+              {rootFiles.map(f => (
+                <FileCard key={f._id} file={f} onLike={onLike} onDislike={onDislike} onDelete={onDelete} onPreview={onPreview} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -293,13 +369,14 @@ const ExperimentSection = ({ experiment, group, lab, isRandom, onPreview }) => {
       .catch(() => {});
   }, [experiment._id]);
 
-  const rootFiles = files.filter(f => !f.folderName && !f.isFolder);
-  const folderMap = {};
-  files.filter(f => f.folderName).forEach(f => {
-    if (!folderMap[f.folderName]) folderMap[f.folderName] = [];
-    folderMap[f.folderName].push(f);
+  // Group all files by uploaderIp — maintain insertion order of IPs
+  const ipOrder = [];
+  const ipMap = {};
+  files.forEach(f => {
+    const ip = f.uploaderIp || 'unknown';
+    if (!ipMap[ip]) { ipMap[ip] = []; ipOrder.push(ip); }
+    ipMap[ip].push(f);
   });
-  const folderNames = Object.keys(folderMap);
 
   const handleSingleUpload = async (e) => {
     const file = e.target.files[0];
@@ -311,7 +388,7 @@ const ExperimentSection = ({ experiment, group, lab, isRandom, onPreview }) => {
     fd.append('group', group); fd.append('lab', lab);
     try {
       const r = await axios.post('/api/files/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-      setFiles(prev => [r.data.file, ...prev]);
+      setFiles(prev => [...prev, r.data.file]);
       toast.success('File uploaded!');
     } catch { toast.error('Upload failed'); }
     finally { setUploading(false); e.target.value = ''; }
@@ -330,7 +407,7 @@ const ExperimentSection = ({ experiment, group, lab, isRandom, onPreview }) => {
       fd.append('experimentId', experiment._id); fd.append('group', group);
       fd.append('lab', lab); fd.append('folderName', folderName);
       const r = await axios.post('/api/files/upload-folder', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-      setFiles(prev => [...(r.data.files || []), ...prev.filter(f => !(f.folderName === folderName && f.isFolder))]);
+      setFiles(prev => [...prev.filter(f => !(f.folderName === folderName && f.isFolder)), ...(r.data.files || [])]);
       toast.success(`Folder "${folderName}" uploaded with ${r.data.files.length} file(s)!`);
     } catch { toast.error('Folder upload failed'); }
     finally { setUploading(false); e.target.value = ''; }
@@ -339,7 +416,7 @@ const ExperimentSection = ({ experiment, group, lab, isRandom, onPreview }) => {
   const handleCreateFolder = async (folderName) => {
     try {
       const r = await axios.post('/api/files/create-folder', { experimentId: experiment._id, group, lab, folderName });
-      setFiles(prev => [r.data.file, ...prev]);
+      setFiles(prev => [...prev, r.data.file]);
       setShowFolderModal(false);
       toast.success(`Folder "${folderName}" created!`);
     } catch (err) { toast.error(err.response?.data?.message || 'Failed to create folder'); }
@@ -355,7 +432,7 @@ const ExperimentSection = ({ experiment, group, lab, isRandom, onPreview }) => {
   };
 
   const handleFilesAdded = (folderName, newFiles) => {
-    setFiles(prev => [...newFiles, ...prev.filter(f => !(f.folderName === folderName && f.isFolder))]);
+    setFiles(prev => [...prev.filter(f => !(f.folderName === folderName && f.isFolder)), ...newFiles]);
   };
 
   const handleLike = async (id) => {
@@ -374,8 +451,8 @@ const ExperimentSection = ({ experiment, group, lab, isRandom, onPreview }) => {
     <div className="bg-zinc-900/40 border border-white/5 rounded-[2rem] p-6 backdrop-blur-sm">
       {showFolderModal && <CreateFolderModal onConfirm={handleCreateFolder} onClose={() => setShowFolderModal(false)} />}
 
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6 border-b border-white/5 pb-5">
+      {/* Experiment header */}
+      <div className="flex items-center justify-between mb-5 border-b border-white/5 pb-5">
         <button onClick={() => setOpen(!open)} className="flex items-center gap-3 text-left">
           <div className={`w-2.5 h-2.5 rounded-full shadow-[0_0_8px_currentColor] ${isRandom ? 'text-[#00c2ff] bg-[#00c2ff]' : 'text-[#ff6b00] bg-[#ff6b00]'}`} />
           <h4 className="text-lg font-black uppercase tracking-tight">{experiment.title}</h4>
@@ -386,23 +463,29 @@ const ExperimentSection = ({ experiment, group, lab, isRandom, onPreview }) => {
 
       {open && (
         <div>
-          {rootFiles.length === 0 && folderNames.length === 0 ? (
+          {ipOrder.length === 0 ? (
             <div className="py-12 text-center border-2 border-dashed border-white/5 rounded-[1.5rem] text-zinc-700 font-black uppercase tracking-widest text-[10px]">
               No Files Yet — Use Upload Menu Above
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-              {/* Folder cards first */}
-              {folderNames.map(fn => (
-                <FolderCard key={fn} folderName={fn} files={folderMap[fn]}
-                  experimentId={experiment._id} group={group} lab={lab}
-                  onLike={handleLike} onDislike={handleDislike} onDelete={handleDelete} onPreview={onPreview}
-                  onFolderDelete={handleFolderDelete} onFilesAdded={handleFilesAdded}
+            <div>
+              {ipOrder.map((ip, idx) => (
+                <IpUserSection
+                  key={ip}
+                  ip={ip}
+                  userNumber={idx + 1}
+                  colorScheme={getIpColor(idx)}
+                  ipFiles={ipMap[ip]}
+                  experimentId={experiment._id}
+                  group={group}
+                  lab={lab}
+                  onLike={handleLike}
+                  onDislike={handleDislike}
+                  onDelete={handleDelete}
+                  onPreview={onPreview}
+                  onFolderDelete={handleFolderDelete}
+                  onFilesAdded={handleFilesAdded}
                 />
-              ))}
-              {/* Then root files */}
-              {rootFiles.map(f => (
-                <FileCard key={f._id} file={f} onLike={handleLike} onDislike={handleDislike} onDelete={handleDelete} onPreview={onPreview} />
               ))}
             </div>
           )}

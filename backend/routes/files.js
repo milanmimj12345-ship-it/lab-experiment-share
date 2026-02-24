@@ -3,20 +3,27 @@ const router = express.Router();
 const File = require('../models/File');
 const { upload, cloudinary } = require('../config/cloudinary');
 
+// Helper: extract real IP from request (works behind Railway/Render proxy)
+const getIp = (req) => {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded) return forwarded.split(',')[0].trim();
+  return req.socket?.remoteAddress || req.connection?.remoteAddress || 'unknown';
+};
+
 // GET files
 router.get('/', async (req, res) => {
   try {
     const { experiment } = req.query;
     const filter = {};
     if (experiment) filter.experiment = experiment;
-    const files = await File.find(filter).populate('experiment', 'title').sort({ createdAt: -1 });
+    const files = await File.find(filter).populate('experiment', 'title').sort({ createdAt: 1 });
     res.json({ success: true, files });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
-// POST upload single file (optionally into a folder)
+// POST upload single file
 router.post('/upload', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
@@ -24,7 +31,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     if (!experimentId || !group || !lab) {
       return res.status(400).json({ success: false, message: 'experimentId, group, and lab required' });
     }
-
+    const uploaderIp = getIp(req);
     const file = await File.create({
       fileName: req.file.originalname,
       originalName: req.file.originalname,
@@ -36,6 +43,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       group: group.toUpperCase(),
       lab: lab.toUpperCase(),
       folderName: folderName || null,
+      uploaderIp,
       uploadedBy: null
     });
     res.status(201).json({ success: true, file });
@@ -52,10 +60,8 @@ router.post('/upload-folder', upload.array('files', 50), async (req, res) => {
     if (!experimentId || !group || !lab || !folderName) {
       return res.status(400).json({ success: false, message: 'experimentId, group, lab, and folderName required' });
     }
-
-    // Remove old folder marker if exists (we're now adding real files)
+    const uploaderIp = getIp(req);
     await File.deleteMany({ experiment: experimentId, folderName, isFolder: true });
-
     const created = await Promise.all(req.files.map(f =>
       File.create({
         fileName: f.originalname,
@@ -67,7 +73,8 @@ router.post('/upload-folder', upload.array('files', 50), async (req, res) => {
         experiment: experimentId,
         group: group.toUpperCase(),
         lab: lab.toUpperCase(),
-        folderName: folderName,
+        folderName,
+        uploaderIp,
         uploadedBy: null
       })
     ));
@@ -84,10 +91,9 @@ router.post('/create-folder', async (req, res) => {
     if (!experimentId || !group || !lab || !folderName) {
       return res.status(400).json({ success: false, message: 'experimentId, group, lab, and folderName required' });
     }
-    // Check if folder already exists
     const existing = await File.findOne({ experiment: experimentId, folderName: folderName.trim() });
     if (existing) return res.status(400).json({ success: false, message: 'A folder with this name already exists' });
-
+    const uploaderIp = getIp(req);
     const folder = await File.create({
       fileName: folderName.trim(),
       originalName: folderName.trim(),
@@ -98,6 +104,7 @@ router.post('/create-folder', async (req, res) => {
       lab: lab.toUpperCase(),
       folderName: folderName.trim(),
       isFolder: true,
+      uploaderIp,
       uploadedBy: null
     });
     res.status(201).json({ success: true, file: folder });
@@ -148,12 +155,11 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// DELETE entire folder (marker + all files inside)
+// DELETE entire folder
 router.delete('/folder/:experimentId/:folderName', async (req, res) => {
   try {
     const { experimentId, folderName } = req.params;
     const files = await File.find({ experiment: experimentId, folderName });
-    // Delete from cloudinary
     await Promise.all(files.map(async f => {
       if (f.publicId && f.fileUrl !== 'folder') {
         try { await cloudinary.uploader.destroy(f.publicId, { resource_type: 'raw' }); } catch (e) {}
