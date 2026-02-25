@@ -260,6 +260,10 @@ const DeviceSection = ({ localIpKey, userNumber, colorScheme, deviceFiles, myLoc
           <span style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '999px', padding: '2px 8px', color: '#555', fontWeight: 900, fontSize: '9px', textTransform: 'uppercase', letterSpacing: '1px' }}>
             {totalItems} item{totalItems !== 1 ? 's' : ''}
           </span>
+          {/* DEBUG: raw deviceId stored in MongoDB for this group */}
+          <span style={{ background: 'rgba(255,50,50,0.15)', border: '1px solid rgba(255,50,50,0.4)', borderRadius: '999px', padding: '2px 8px', color: '#ff6666', fontWeight: 900, fontSize: '9px', fontFamily: 'monospace' }}>
+            {localIpKey.slice(0, 12)}
+          </span>
         </div>
         <span style={{ color: '#444', fontSize: '11px' }}>{open ? '▾' : '▸'}</span>
       </button>
