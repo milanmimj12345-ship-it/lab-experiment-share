@@ -22,7 +22,6 @@ import { isImage, PreviewModal } from './PreviewModal';
 const warmLocalIp = () => {
   let id = localStorage.getItem('av_uid');
   if (!id) {
-    // Generate a proper UUID v4
     id = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
       const r = Math.random() * 16 | 0;
       return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
@@ -30,6 +29,17 @@ const warmLocalIp = () => {
     localStorage.setItem('av_uid', id);
   }
   return Promise.resolve(id);
+};
+
+// DEBUG badge — shows first 8 chars of this device's UUID in bottom corner
+const DeviceDebugBadge = () => {
+  const [uid, setUid] = React.useState('...');
+  React.useEffect(() => { warmLocalIp().then(id => setUid(id.slice(0, 8))); }, []);
+  return (
+    <div style={{ position: 'fixed', bottom: 12, right: 12, zIndex: 9999, background: '#0a0a0a', border: '1px solid #333', borderRadius: 8, padding: '4px 10px', fontSize: 10, color: '#ff6b00', fontFamily: 'monospace', letterSpacing: 1 }}>
+      DEV-ID: {uid}
+    </div>
+  );
 };
 
 // ─── Color palette ─────────────────────────────────────────────────────────────
@@ -550,6 +560,7 @@ const RepositoryPage = ({ navigate, group, lab }) => {
 
   return (
     <div className="min-h-screen p-8 pt-28 max-w-7xl mx-auto">
+      <DeviceDebugBadge />
       {previewFile && <PreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />}
       <button onClick={() => navigate('group_select')} className="flex items-center gap-2 text-zinc-500 hover:text-white mb-6 text-xs font-black uppercase tracking-widest transition-all group">
         <div className="w-7 h-7 rounded-full border border-white/5 flex items-center justify-center group-hover:bg-white/5"><ArrowLeft className="w-3.5 h-3.5" /></div>
