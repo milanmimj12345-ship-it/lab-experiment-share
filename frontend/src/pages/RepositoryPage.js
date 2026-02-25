@@ -33,8 +33,8 @@ const warmLocalIp = () => {
 
 // DEBUG badge — shows first 8 chars of this device's UUID in bottom corner
 const DeviceDebugBadge = () => {
-  const [uid, setUid] = React.useState('...');
-  React.useEffect(() => { warmLocalIp().then(id => setUid(id.slice(0, 8))); }, []);
+  const [uid, setUid] = useState('...');
+  useEffect(() => { warmLocalIp().then(id => setUid(id.slice(0, 8))); }, []);
   return (
     <div style={{ position: 'fixed', bottom: 12, right: 12, zIndex: 9999, background: '#0a0a0a', border: '1px solid #333', borderRadius: 8, padding: '4px 10px', fontSize: 10, color: '#ff6b00', fontFamily: 'monospace', letterSpacing: 1 }}>
       DEV-ID: {uid}
