@@ -13,7 +13,6 @@ const fileSchema = new mongoose.Schema({
   uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   uploaderIp: { type: String, default: 'unknown' },
   deviceId: { type: String, default: 'unknown' }, // = uploaderName.toLowerCase() — used for grouping
-  uploaderName: { type: String, default: 'Unknown' }, // display name entered by user
   likes: { type: Number, default: 0 },
   dislikes: { type: Number, default: 0 },
   isFlagged: { type: Boolean, default: false },

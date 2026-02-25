@@ -26,7 +26,7 @@ router.get('/', async (req, res) => {
 router.post('/upload', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
-    const { experimentId, group, lab, folderName, uploaderName } = req.body;
+    const { experimentId, group, lab, folderName, deviceId } = req.body;
     if (!experimentId || !group || !lab) {
       return res.status(400).json({ success: false, message: 'experimentId, group, and lab required' });
     }
@@ -42,8 +42,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       lab: lab.toUpperCase(),
       folderName: folderName || null,
       uploaderIp: getIp(req),
-      deviceId: uploaderName ? uploaderName.trim().toLowerCase() : 'unknown',
-      uploaderName: uploaderName ? uploaderName.trim() : 'Unknown',
+      deviceId: deviceId || 'unknown',
       uploadedBy: null
     });
     res.status(201).json({ success: true, file });
@@ -56,12 +55,11 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 router.post('/upload-folder', upload.array('files', 50), async (req, res) => {
   try {
     if (!req.files || req.files.length === 0) return res.status(400).json({ success: false, message: 'No files uploaded' });
-    const { experimentId, group, lab, folderName, uploaderName } = req.body;
+    const { experimentId, group, lab, folderName, deviceId } = req.body;
     if (!experimentId || !group || !lab || !folderName) {
       return res.status(400).json({ success: false, message: 'experimentId, group, lab, and folderName required' });
     }
     await File.deleteMany({ experiment: experimentId, folderName, isFolder: true });
-    const nameKey = uploaderName ? uploaderName.trim().toLowerCase() : 'unknown';
     const created = await Promise.all(req.files.map(f =>
       File.create({
         fileName: f.originalname, originalName: f.originalname,
@@ -69,8 +67,7 @@ router.post('/upload-folder', upload.array('files', 50), async (req, res) => {
         fileType: f.mimetype, fileSize: f.size,
         experiment: experimentId, group: group.toUpperCase(), lab: lab.toUpperCase(),
         folderName, uploaderIp: getIp(req),
-        deviceId: nameKey,
-        uploaderName: uploaderName ? uploaderName.trim() : 'Unknown',
+        deviceId: deviceId || 'unknown',
         uploadedBy: null
       })
     ));
@@ -83,7 +80,7 @@ router.post('/upload-folder', upload.array('files', 50), async (req, res) => {
 // POST create empty folder
 router.post('/create-folder', async (req, res) => {
   try {
-    const { experimentId, group, lab, folderName, uploaderName } = req.body;
+    const { experimentId, group, lab, folderName, deviceId } = req.body;
     if (!experimentId || !group || !lab || !folderName) {
       return res.status(400).json({ success: false, message: 'experimentId, group, lab, and folderName required' });
     }
@@ -96,8 +93,7 @@ router.post('/create-folder', async (req, res) => {
       experiment: experimentId, group: group.toUpperCase(), lab: lab.toUpperCase(),
       folderName: folderName.trim(), isFolder: true,
       uploaderIp: getIp(req),
-      deviceId: nameKey,
-      uploaderName: uploaderName ? uploaderName.trim() : 'Unknown',
+      deviceId: deviceId || 'unknown',
       uploadedBy: null
     });
     res.status(201).json({ success: true, file: folder });
