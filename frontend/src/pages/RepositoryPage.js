@@ -78,6 +78,7 @@ const getColor = (idx) => COLORS[idx % COLORS.length];
 // ─── Folder AI Preview Modal ──────────────────────────────────────────────────
 const IMAGE_EXTS = ['jpg','jpeg','png','webp','gif','bmp'];
 const isImgFile = (name) => IMAGE_EXTS.includes((name||'').split('.').pop().toLowerCase());
+const getFileDisplayName = (f) => f.originalName || f.fileName || '';
 
 const BACKEND = 'https://lab-experiment-share-production.up.railway.app';
 
@@ -143,7 +144,7 @@ Return ONLY clean, executable Python code in correct order. No explanations.`
 };
 
 const FolderAIPreviewModal = ({ folderName, files, onClose }) => {
-  const imageFiles = files.filter(f => !f.isFolder && isImgFile(f.originalName));
+  const imageFiles = files.filter(f => !f.isFolder && isImgFile(getFileDisplayName(f)));
   const [contentType, setContentType] = useState('dbms');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState('');
@@ -152,7 +153,7 @@ const FolderAIPreviewModal = ({ folderName, files, onClose }) => {
   const [status, setStatus] = useState('');
   const [rejectedCount, setRejectedCount] = useState(0);
 
-  const nonImageCount = files.filter(f => !f.isFolder && !isImgFile(f.originalName)).length;
+  const nonImageCount = files.filter(f => !f.isFolder && !isImgFile(getFileDisplayName(f))).length;
 
   const runFolderAI = async () => {
     if (imageFiles.length === 0) {
@@ -469,12 +470,10 @@ const FolderCard = ({ folderName, files, experimentId, group, lab, onLike, onDis
           <span className="text-[9px] text-zinc-600 font-black uppercase tracking-wider">Click to open</span>
           <div className="flex gap-1" onClick={e => e.stopPropagation()}>
             <button onClick={downloadFolder} className="w-7 h-7 bg-zinc-900 border border-white/5 text-[#ff6b00] rounded-lg hover:bg-[#ff6b00] hover:text-black transition-all flex items-center justify-center"><ArrowDownToLine className="w-3 h-3" /></button>
-            {hasImages && (
-              <button onClick={(e) => { e.stopPropagation(); setShowAI(true); }}
-                className="w-7 h-7 bg-zinc-900 border border-white/5 text-[#00ff8c] rounded-lg hover:bg-[#00ff8c] hover:text-black transition-all flex items-center justify-center" title="AI Preview — extract code from images">
-                <Sparkles className="w-3 h-3" />
-              </button>
-            )}
+            <button onClick={(e) => { e.stopPropagation(); setShowAI(true); }}
+              className="w-7 h-7 bg-zinc-900 border border-white/5 text-[#00ff8c] rounded-lg hover:bg-[#00ff8c] hover:text-black transition-all flex items-center justify-center" title="AI Preview — extract code from images">
+              <Sparkles className="w-3 h-3" />
+            </button>
             <button onClick={() => onFolderDelete(folderName)} className="w-7 h-7 bg-zinc-900 border border-white/5 text-zinc-600 rounded-lg hover:bg-red-500/20 hover:text-red-400 transition-all flex items-center justify-center"><Trash2 className="w-3 h-3" /></button>
           </div>
         </div>
@@ -496,12 +495,10 @@ const FolderCard = ({ folderName, files, experimentId, group, lab, onLike, onDis
                 <button onClick={downloadFolder} className="flex items-center gap-2 px-4 py-2 bg-[#ff6b00]/10 border border-[#ff6b00]/30 text-[#ff6b00] rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-[#ff6b00]/20 transition-all">
                   <ArrowDownToLine className="w-3 h-3" /> Download All
                 </button>
-                {hasImages && (
-                  <button onClick={() => { setOpen(false); setShowAI(true); }}
-                    className="flex items-center gap-2 px-4 py-2 bg-[#00ff8c]/10 border border-[#00ff8c]/30 text-[#00ff8c] rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-[#00ff8c]/20 transition-all">
-                    <Sparkles className="w-3 h-3" /> AI Preview
-                  </button>
-                )}
+                <button onClick={() => { setOpen(false); setShowAI(true); }}
+                  className="flex items-center gap-2 px-4 py-2 bg-[#00ff8c]/10 border border-[#00ff8c]/30 text-[#00ff8c] rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-[#00ff8c]/20 transition-all">
+                  <Sparkles className="w-3 h-3" /> AI Preview
+                </button>
                 <label className={`flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 text-white rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all cursor-pointer ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
                   <Plus className="w-3 h-3" /> {uploading ? 'Uploading...' : 'Add Files'}
                   <input type="file" multiple className="hidden" onChange={handleAddFiles} disabled={uploading} />
