@@ -8,69 +8,28 @@ import {
 } from 'lucide-react';
 import { isImage, PreviewModal } from './PreviewModal';
 
-// ─── Robust Device Fingerprint ───────────────────────────────────────────────
-// Uses signals guaranteed to differ between ANY two different physical devices:
+// ─── Simple UUID Device ID ────────────────────────────────────────────────────
+// Generates a random UUID on first visit and stores it in localStorage.
+// This is guaranteed to:
+//   ✓ Be the same across ALL tabs in the same browser on the same device
+//   ✓ Be different on phone vs desktop (different localStorage stores)
+//   ✓ Be different on two different laptops
+//   ✓ Work on every browser, no permissions, no async, instant
 //
-//  1. navigator.userAgent   — contains exact OS + device model (Win10 vs Android 12)
-//  2. Physical screen pixels — screen.width * devicePixelRatio (1920 vs 393)  
-//  3. maxTouchPoints        — 0 on desktop, 5+ on mobile
-//  4. hardwareConcurrency   — CPU core count
-//  5. deviceMemory          — RAM in GB
-//  6. timezone              — system timezone
-//
-// Two identical phone models would need same model+OS+RAM+timezone to collide,
-// which is then further separated by canvas GPU rendering as a tiebreaker.
-
-let _cachedFp = null;
-
-const hashStr = (s) => {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 0x01000193) >>> 0;
-  }
-  return h.toString(36);
-};
-
-const getCanvasTiebreaker = () => {
-  try {
-    const c = document.createElement('canvas');
-    c.width = 200; c.height = 40;
-    const ctx = c.getContext('2d');
-    if (!ctx) return '0';
-    ctx.fillStyle = '#f0f'; ctx.fillRect(0, 0, 200, 40);
-    ctx.fillStyle = '#0ff'; ctx.font = '14px monospace';
-    ctx.fillText('AdamVilla2026\u2665', 5, 25);
-    ctx.fillStyle = 'rgba(255,100,0,0.6)';
-    ctx.beginPath(); ctx.arc(150, 20, 15, 0, Math.PI * 2); ctx.fill();
-    return c.toDataURL().slice(-60);
-  } catch(e) { return '0'; }
-};
+// Note: different browsers on the SAME device will get different IDs (rare edge case).
+// For school lab use (students pick one browser), this is perfectly fine.
 
 const warmLocalIp = () => {
-  if (_cachedFp) return Promise.resolve(_cachedFp);
-
-  const ua = navigator.userAgent || '';
-  
-  // Physical pixel dimensions — phone (393×852 CSS → 1179×2556 physical) vs desktop (1920×1080)
-  const physW = Math.round(screen.width * (window.devicePixelRatio || 1));
-  const physH = Math.round(screen.height * (window.devicePixelRatio || 1));
-
-  const signals = [
-    ua,                                                    // Win10/Android/iOS — always unique
-    physW, physH,                                          // physical pixel resolution
-    window.devicePixelRatio || 1,                          // 1=desktop, 2/3=phone
-    navigator.maxTouchPoints || 0,                         // 0=desktop mouse, 5+=touchscreen
-    navigator.hardwareConcurrency || 0,                    // CPU cores
-    navigator.deviceMemory || 0,                           // RAM GB
-    Intl.DateTimeFormat().resolvedOptions().timeZone,      // system timezone
-    screen.colorDepth,
-    getCanvasTiebreaker(),                                 // GPU tiebreaker for identical models
-  ].join('||');
-
-  const fp = 'v4_' + hashStr(signals);
-  _cachedFp = fp;
-  return Promise.resolve(fp);
+  let id = localStorage.getItem('av_uid');
+  if (!id) {
+    // Generate a proper UUID v4
+    id = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = Math.random() * 16 | 0;
+      return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+    localStorage.setItem('av_uid', id);
+  }
+  return Promise.resolve(id);
 };
 
 // ─── Color palette ─────────────────────────────────────────────────────────────
