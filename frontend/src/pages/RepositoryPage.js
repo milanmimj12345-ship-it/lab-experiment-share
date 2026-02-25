@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import {
   ArrowLeft, Plus, Folder, FolderOpen, Download, ThumbsUp, ThumbsDown,
   AlertTriangle, Trash2, Eye, Upload, FolderPlus, FolderUp, X,
-  ChevronDown, File as FileIcon, ArrowDownToLine, User
+  ChevronDown, File as FileIcon, ArrowDownToLine, User, Sparkles, Copy, Check, Loader
 } from 'lucide-react';
 import { isImage, PreviewModal } from './PreviewModal';
 
@@ -74,6 +74,278 @@ const COLORS = [
 ];
 const getColor = (idx) => COLORS[idx % COLORS.length];
 
+
+// ─── Folder AI Preview Modal ──────────────────────────────────────────────────
+const IMAGE_EXTS = ['jpg','jpeg','png','webp','gif','bmp'];
+const isImgFile = (name) => IMAGE_EXTS.includes((name||'').split('.').pop().toLowerCase());
+
+const BACKEND = 'https://lab-experiment-share-production.up.railway.app';
+
+const FOLDER_AI_PROMPTS = {
+  dbms: `You are an SQL extraction engine analyzing MULTIPLE terminal screenshots from a lab session.
+These images show a DBMS/MySQL terminal session — they may be uploaded in random order.
+
+Your tasks:
+1. Determine the CORRECT chronological order of the images based on context (command history, line numbers, session state)
+2. Extract ONLY valid, successfully executed SQL statements across ALL images
+3. Combine them in correct execution order
+
+Exclude completely:
+- MySQL console output / results / tables
+- Error messages, warnings, failed queries
+- Repeated corrections of the same command
+- System messages
+
+Include:
+- All successfully executed SQL (SELECT, SHOW, DESC, CREATE, INSERT, UPDATE, DELETE, etc.)
+- Proper semicolons
+- Correct logical order
+
+Return ONLY a clean, executable MySQL script. No explanations, no comments, no extra text.`,
+
+  linux: `You are a Linux command extraction engine analyzing MULTIPLE terminal screenshots from a lab session.
+These images may be uploaded in random order.
+
+Your tasks:
+1. Determine the CORRECT chronological order based on context (prompt history, command sequence, session flow)
+2. Extract ONLY the commands the user typed — NOT the output
+
+Exclude completely:
+- Command output / results
+- Error messages ("command not found", "permission denied")
+- System messages, warnings
+- Failed attempts
+
+Include:
+- Only user-typed commands (lines starting with $ or # or the prompt)
+- Exact original text
+- Correct execution order
+
+Return ONLY the clean command list, one per line. No explanations, no extra text.`,
+
+  c: `You are a C program extractor analyzing MULTIPLE screenshots that together form a complete C program.
+These images may be uploaded in random order.
+
+Your tasks:
+1. Determine the CORRECT order of the code fragments based on program structure
+2. Reconstruct the complete, clean C source code
+
+Return ONLY the complete, compilable C source code. No explanations, no comments about the images.`,
+
+  python: `You are a Python code extractor analyzing MULTIPLE screenshots of a Python program or terminal session.
+These images may be uploaded in random order.
+
+Your tasks:
+1. Determine the CORRECT order of code fragments
+2. Extract ONLY the Python code (not output/errors)
+
+Return ONLY clean, executable Python code in correct order. No explanations.`
+};
+
+const FolderAIPreviewModal = ({ folderName, files, onClose }) => {
+  const imageFiles = files.filter(f => !f.isFolder && isImgFile(f.originalName));
+  const [contentType, setContentType] = useState('dbms');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState('');
+  const [done, setDone] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [status, setStatus] = useState('');
+  const [rejectedCount, setRejectedCount] = useState(0);
+
+  const nonImageCount = files.filter(f => !f.isFolder && !isImgFile(f.originalName)).length;
+
+  const runFolderAI = async () => {
+    if (imageFiles.length === 0) {
+      setResult('⚠️ No image files found in this folder. AI preview only works with image files (JPG, PNG, etc.).');
+      setDone(true);
+      return;
+    }
+    setLoading(true);
+    setDone(false);
+    setResult('');
+    setRejectedCount(nonImageCount);
+
+    try {
+      // Fetch all images as base64 via backend proxy
+      setStatus(`Loading ${imageFiles.length} image${imageFiles.length > 1 ? 's' : ''}...`);
+      const imageContents = [];
+
+      for (let i = 0; i < imageFiles.length; i++) {
+        const file = imageFiles[i];
+        setStatus(`Loading image ${i + 1} of ${imageFiles.length}: ${file.originalName}`);
+        try {
+          const proxyRes = await fetch(
+            BACKEND + '/api/image-proxy?url=' + encodeURIComponent(file.fileUrl)
+          );
+          const { base64, mimeType } = await proxyRes.json();
+          if (base64) {
+            imageContents.push({
+              name: file.originalName,
+              base64,
+              mimeType: mimeType || 'image/jpeg'
+            });
+          }
+        } catch (e) {
+          console.warn('Could not load image:', file.originalName);
+        }
+      }
+
+      if (imageContents.length === 0) {
+        throw new Error('Could not load any images via proxy');
+      }
+
+      setStatus(`Sending ${imageContents.length} images to AI for analysis...`);
+
+      // Build message with all images + prompt
+      const parts = [];
+
+      // Add all images first
+      imageContents.forEach((img, idx) => {
+        parts.push({
+          type: 'image',
+          source: { type: 'base64', media_type: img.mimeType, data: img.base64 }
+        });
+        parts.push({
+          type: 'text',
+          text: `[Image ${idx + 1}: ${img.name}]`
+        });
+      });
+
+      // Add the instruction prompt
+      parts.push({
+        type: 'text',
+        text: FOLDER_AI_PROMPTS[contentType]
+      });
+
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1000,
+          messages: [{ role: 'user', content: parts }]
+        })
+      });
+
+      const data = await response.json();
+      const text = data?.content?.[0]?.text || 'No content extracted.';
+      setResult(text);
+      setDone(true);
+    } catch (err) {
+      setResult('Failed to process folder.\n\nError: ' + err.message);
+      setDone(true);
+    } finally {
+      setLoading(false);
+      setStatus('');
+    }
+  };
+
+  const copyResult = () => {
+    navigator.clipboard.writeText(result);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', zIndex: 1001, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', backdropFilter: 'blur(12px)' }}>
+      <div style={{ background: '#0a0a0a', border: '1px solid rgba(0,255,140,0.2)', borderRadius: '28px', width: '100%', maxWidth: '860px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 0 80px rgba(0,255,140,0.05)' }}>
+
+        {/* Header */}
+        <div style={{ padding: '20px 24px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+          <div className="flex items-center gap-3">
+            <div style={{ width: 40, height: 40, background: 'rgba(0,255,140,0.1)', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Sparkles size={18} color="#00ff8c" />
+            </div>
+            <div>
+              <h3 style={{ fontWeight: 900, fontSize: 15, textTransform: 'uppercase', letterSpacing: 1, color: '#fff', margin: 0 }}>
+                AI Folder Preview
+              </h3>
+              <p style={{ color: '#555', fontSize: 10, fontWeight: 700, margin: '2px 0 0', textTransform: 'uppercase', letterSpacing: 2 }}>
+                {folderName} · {imageFiles.length} image{imageFiles.length !== 1 ? 's' : ''}
+                {nonImageCount > 0 && <span style={{ color: '#ff4444', marginLeft: 6 }}>· {nonImageCount} non-image file{nonImageCount > 1 ? 's' : ''} will be skipped</span>}
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#666', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <X size={15} />
+          </button>
+        </div>
+
+        {/* Controls */}
+        <div style={{ padding: '16px 24px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0, flexWrap: 'wrap' }}>
+          <span style={{ color: '#555', fontSize: 10, fontWeight: 900, textTransform: 'uppercase', letterSpacing: 1 }}>Content Type:</span>
+          {[
+            { id: 'dbms', label: 'DBMS / SQL' },
+            { id: 'linux', label: 'Linux Terminal' },
+            { id: 'c', label: 'C Program' },
+            { id: 'python', label: 'Python' },
+          ].map(t => (
+            <button key={t.id} onClick={() => { setContentType(t.id); setDone(false); setResult(''); }}
+              style={{ padding: '6px 14px', borderRadius: 999, border: contentType === t.id ? '1px solid rgba(0,255,140,0.5)' : '1px solid rgba(255,255,255,0.08)', background: contentType === t.id ? 'rgba(0,255,140,0.1)' : 'rgba(255,255,255,0.03)', color: contentType === t.id ? '#00ff8c' : '#666', fontWeight: 900, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, cursor: 'pointer', transition: 'all 0.2s' }}>
+              {t.label}
+            </button>
+          ))}
+
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+            {done && result && (
+              <button onClick={copyResult}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 999, border: '1px solid rgba(255,255,255,0.1)', background: copied ? 'rgba(0,255,140,0.1)' : 'rgba(255,255,255,0.04)', color: copied ? '#00ff8c' : '#888', fontWeight: 900, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, cursor: 'pointer', transition: 'all 0.2s' }}>
+                {copied ? <Check size={12} /> : <Copy size={12} />}
+                {copied ? 'Copied!' : 'Copy'}
+              </button>
+            )}
+            <button onClick={runFolderAI} disabled={loading || imageFiles.length === 0}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 20px', borderRadius: 999, border: '1px solid rgba(0,255,140,0.4)', background: loading ? 'rgba(0,255,140,0.05)' : 'rgba(0,255,140,0.12)', color: '#00ff8c', fontWeight: 900, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, cursor: loading || imageFiles.length === 0 ? 'not-allowed' : 'pointer', opacity: imageFiles.length === 0 ? 0.4 : 1, transition: 'all 0.2s' }}>
+              <Sparkles size={12} />
+              {loading ? 'Analyzing...' : done ? 'Re-analyze' : 'Analyze Folder'}
+            </button>
+          </div>
+        </div>
+
+        {/* Info banner */}
+        {!loading && !done && (
+          <div style={{ margin: '16px 24px 0', padding: '12px 16px', background: 'rgba(0,255,140,0.04)', border: '1px solid rgba(0,255,140,0.12)', borderRadius: 14, flexShrink: 0 }}>
+            <div className="flex items-start gap-2">
+              <Sparkles size={13} color="#00ff8c" style={{ marginTop: 1, flexShrink: 0 }} />
+              <p style={{ color: '#00ff8c', fontSize: 11, fontWeight: 700, margin: 0, lineHeight: 1.6 }}>
+                AI will analyze all <strong>{imageFiles.length} image{imageFiles.length !== 1 ? 's' : ''}</strong> in this folder, automatically determine their correct order, and extract clean executable <strong>{contentType.toUpperCase()}</strong> code — even if images were uploaded in the wrong order.
+                {nonImageCount > 0 && <span style={{ color: '#ff6666' }}> {nonImageCount} non-image file{nonImageCount > 1 ? 's' : ''} will be ignored.</span>}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Content */}
+        <div style={{ flex: 1, overflow: 'auto', padding: '20px 24px' }}>
+          {loading && (
+            <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+              <div style={{ width: 48, height: 48, margin: '0 auto 20px', borderRadius: '50%', border: '3px solid rgba(0,255,140,0.15)', borderTop: '3px solid #00ff8c', animation: 'spin 1s linear infinite' }} />
+              <p style={{ color: '#00ff8c', fontWeight: 900, fontSize: 14, textTransform: 'uppercase', letterSpacing: 2, margin: '0 0 8px' }}>
+                AI Analyzing {imageFiles.length} Images...
+              </p>
+              <p style={{ color: '#444', fontSize: 11, margin: 0, fontFamily: 'monospace' }}>{status}</p>
+            </div>
+          )}
+
+          {!loading && done && (
+            <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: '#00ff8c', fontFamily: "'Courier New', monospace", fontSize: 13, lineHeight: 1.75, background: 'rgba(0,255,140,0.03)', border: '1px solid rgba(0,255,140,0.1)', borderRadius: 16, padding: 24, margin: 0 }}>
+              {result}
+            </pre>
+          )}
+
+          {!loading && !done && imageFiles.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '60px 20px', color: '#444', fontWeight: 900, fontSize: 12, textTransform: 'uppercase', letterSpacing: 2 }}>
+              No image files in this folder
+            </div>
+          )}
+        </div>
+      </div>
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+};
+
 // ─── File Card ────────────────────────────────────────────────────────────────
 const FileCard = ({ file, onLike, onDislike, onDelete, onPreview, compact = false }) => {
   const flagged = (file.dislikes || 0) >= 5;
@@ -137,7 +409,10 @@ const FileCard = ({ file, onLike, onDislike, onDelete, onPreview, compact = fals
 const FolderCard = ({ folderName, files, experimentId, group, lab, onLike, onDislike, onDelete, onPreview, onFolderDelete, onFilesAdded }) => {
   const [open, setOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [showAI, setShowAI] = useState(false);
   const realFiles = files.filter(f => !f.isFolder);
+  const imageFiles = realFiles.filter(f => isImgFile(f.originalName));
+  const hasImages = imageFiles.length > 0;
 
   const handleAddFiles = async (e) => {
     const sel = Array.from(e.target.files);
@@ -194,6 +469,12 @@ const FolderCard = ({ folderName, files, experimentId, group, lab, onLike, onDis
           <span className="text-[9px] text-zinc-600 font-black uppercase tracking-wider">Click to open</span>
           <div className="flex gap-1" onClick={e => e.stopPropagation()}>
             <button onClick={downloadFolder} className="w-7 h-7 bg-zinc-900 border border-white/5 text-[#ff6b00] rounded-lg hover:bg-[#ff6b00] hover:text-black transition-all flex items-center justify-center"><ArrowDownToLine className="w-3 h-3" /></button>
+            {hasImages && (
+              <button onClick={(e) => { e.stopPropagation(); setShowAI(true); }}
+                className="w-7 h-7 bg-zinc-900 border border-white/5 text-[#00ff8c] rounded-lg hover:bg-[#00ff8c] hover:text-black transition-all flex items-center justify-center" title="AI Preview — extract code from images">
+                <Sparkles className="w-3 h-3" />
+              </button>
+            )}
             <button onClick={() => onFolderDelete(folderName)} className="w-7 h-7 bg-zinc-900 border border-white/5 text-zinc-600 rounded-lg hover:bg-red-500/20 hover:text-red-400 transition-all flex items-center justify-center"><Trash2 className="w-3 h-3" /></button>
           </div>
         </div>
@@ -215,6 +496,12 @@ const FolderCard = ({ folderName, files, experimentId, group, lab, onLike, onDis
                 <button onClick={downloadFolder} className="flex items-center gap-2 px-4 py-2 bg-[#ff6b00]/10 border border-[#ff6b00]/30 text-[#ff6b00] rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-[#ff6b00]/20 transition-all">
                   <ArrowDownToLine className="w-3 h-3" /> Download All
                 </button>
+                {hasImages && (
+                  <button onClick={() => { setOpen(false); setShowAI(true); }}
+                    className="flex items-center gap-2 px-4 py-2 bg-[#00ff8c]/10 border border-[#00ff8c]/30 text-[#00ff8c] rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-[#00ff8c]/20 transition-all">
+                    <Sparkles className="w-3 h-3" /> AI Preview
+                  </button>
+                )}
                 <label className={`flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 text-white rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all cursor-pointer ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
                   <Plus className="w-3 h-3" /> {uploading ? 'Uploading...' : 'Add Files'}
                   <input type="file" multiple className="hidden" onChange={handleAddFiles} disabled={uploading} />
@@ -235,6 +522,13 @@ const FolderCard = ({ folderName, files, experimentId, group, lab, onLike, onDis
             </div>
           </div>
         </div>
+      )}
+      {showAI && (
+        <FolderAIPreviewModal
+          folderName={folderName}
+          files={realFiles}
+          onClose={() => setShowAI(false)}
+        />
       )}
     </>
   );
