@@ -164,73 +164,23 @@ const FolderAIPreviewModal = ({ folderName, files, onClose }) => {
     setLoading(true);
     setDone(false);
     setResult('');
-    setRejectedCount(nonImageCount);
 
     try {
-      // Fetch all images as base64 via backend proxy
-      setStatus(`Loading ${imageFiles.length} image${imageFiles.length > 1 ? 's' : ''}...`);
-      const imageContents = [];
+      setStatus(`Sending ${imageFiles.length} image${imageFiles.length > 1 ? 's' : ''} to AI...`);
 
-      for (let i = 0; i < imageFiles.length; i++) {
-        const file = imageFiles[i];
-        setStatus(`Loading image ${i + 1} of ${imageFiles.length}: ${file.originalName}`);
-        try {
-          const proxyRes = await fetch(
-            BACKEND + '/api/image-proxy?url=' + encodeURIComponent(file.fileUrl)
-          );
-          const { base64, mimeType } = await proxyRes.json();
-          if (base64) {
-            imageContents.push({
-              name: file.originalName,
-              base64,
-              mimeType: mimeType || 'image/jpeg'
-            });
-          }
-        } catch (e) {
-          console.warn('Could not load image:', file.originalName);
-        }
-      }
-
-      if (imageContents.length === 0) {
-        throw new Error('Could not load any images via proxy');
-      }
-
-      setStatus(`Sending ${imageContents.length} images to AI for analysis...`);
-
-      // Build message with all images + prompt
-      const parts = [];
-
-      // Add all images first
-      imageContents.forEach((img, idx) => {
-        parts.push({
-          type: 'image',
-          source: { type: 'base64', media_type: img.mimeType, data: img.base64 }
-        });
-        parts.push({
-          type: 'text',
-          text: `[Image ${idx + 1}: ${img.name}]`
-        });
-      });
-
-      // Add the instruction prompt
-      parts.push({
-        type: 'text',
-        text: FOLDER_AI_PROMPTS[contentType]
-      });
-
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      const response = await fetch(BACKEND + '/api/folder-ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 1000,
-          messages: [{ role: 'user', content: parts }]
+          imageUrls: imageFiles.map(f => f.fileUrl),
+          prompt: FOLDER_AI_PROMPTS[contentType]
         })
       });
 
       const data = await response.json();
-      const text = data?.content?.[0]?.text || 'No content extracted.';
-      setResult(text);
+      if (!response.ok || data.error) throw new Error(data.error || 'Server error');
+
+      setResult(data.text || 'No content extracted.');
       setDone(true);
     } catch (err) {
       setResult('Failed to process folder.\n\nError: ' + err.message);

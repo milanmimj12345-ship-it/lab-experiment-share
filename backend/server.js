@@ -143,6 +143,79 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
 
+
+// Folder AI — fetches multiple images and sends to Groq vision API
+// Called by FolderAIPreviewModal in frontend (avoids CORS)
+app.post('/api/folder-ai', async (req, res) => {
+  try {
+    const { imageUrls, prompt } = req.body;
+    if (!imageUrls || imageUrls.length === 0) {
+      return res.status(400).json({ error: 'No image URLs provided' });
+    }
+
+    const GROQ_API_KEY = process.env.GROQ_API_KEY;
+    if (!GROQ_API_KEY) {
+      return res.status(500).json({ error: 'GROQ_API_KEY not configured on server' });
+    }
+
+    // Fetch all images as base64 server-side (no CORS issues)
+    const imageParts = [];
+    for (const url of imageUrls) {
+      try {
+        const response = await fetch(url);
+        const buffer = await response.arrayBuffer();
+        const base64 = Buffer.from(buffer).toString('base64');
+        const mimeType = response.headers.get('content-type') || 'image/jpeg';
+        imageParts.push({ base64, mimeType, url });
+      } catch (e) {
+        console.warn('Could not fetch image:', url, e.message);
+      }
+    }
+
+    if (imageParts.length === 0) {
+      return res.status(400).json({ error: 'Could not load any images' });
+    }
+
+    // Build Groq message with all images
+    const userContent = [];
+    imageParts.forEach((img, idx) => {
+      userContent.push({
+        type: 'image_url',
+        image_url: { url: `data:${img.mimeType};base64,${img.base64}` }
+      });
+      userContent.push({
+        type: 'text',
+        text: `[Image ${idx + 1}]`
+      });
+    });
+    userContent.push({ type: 'text', text: prompt });
+
+    const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+        messages: [{ role: 'user', content: userContent }],
+        max_tokens: 4096,
+        temperature: 0.1
+      })
+    });
+
+    const data = await groqRes.json();
+    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+
+    const text = data?.choices?.[0]?.message?.content || 'No content extracted.';
+    res.json({ success: true, text });
+
+  } catch (err) {
+    console.error('Folder AI error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Image proxy - fetches Cloudinary image server-side to avoid CORS
 app.get('/api/image-proxy', async (req, res) => {
   try {
@@ -153,53 +226,6 @@ app.get('/api/image-proxy', async (req, res) => {
     const base64 = Buffer.from(buffer).toString('base64');
     const contentType = response.headers.get('content-type') || 'image/jpeg';
     res.json({ base64, mimeType: contentType });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Groq AI proxy - calls Groq (free tier, generous limits) from backend
-app.post('/api/ai-analyze', async (req, res) => {
-  try {
-    const { imageUrl, prompt } = req.body;
-    if (!imageUrl || !prompt) return res.status(400).json({ error: 'imageUrl and prompt required' });
-
-    const GROQ_API_KEY = process.env.GROQ_API_KEY;
-    if (!GROQ_API_KEY) return res.status(500).json({ error: 'Groq API key not configured on server' });
-
-    // Fetch image and convert to base64
-    const imgResponse = await fetch(imageUrl);
-    const buffer = await imgResponse.arrayBuffer();
-    const base64 = Buffer.from(buffer).toString('base64');
-    const mimeType = imgResponse.headers.get('content-type') || 'image/jpeg';
-
-    // Call Groq vision model
-    const groqRes = await fetch(
-      'https://api.groq.com/openai/v1/chat/completions',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${GROQ_API_KEY}`
-        },
-        body: JSON.stringify({
-          model: 'meta-llama/llama-4-scout-17b-16e-instruct',
-          messages: [{
-            role: 'user',
-            content: [
-              { type: 'text', text: prompt },
-              { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64}` } }
-            ]
-          }],
-          max_tokens: 2000
-        })
-      }
-    );
-
-    const data = await groqRes.json();
-    if (data.error) return res.status(429).json({ error: data.error.message });
-    const text = data?.choices?.[0]?.message?.content || 'No content extracted.';
-    res.json({ success: true, text });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
