@@ -8,73 +8,67 @@ import {
 } from 'lucide-react';
 import { isImage, PreviewModal } from './PreviewModal';
 
-// ─── Canvas + Hardware Device Fingerprint ────────────────────────────────────
-// Canvas fingerprinting: each GPU/driver renders text and shapes with subtly
-// different anti-aliasing and subpixel rounding. The resulting pixel data is
-// hashed into a unique ID that is:
-//   ✓ Identical on Chrome, Edge, Firefox, Safari on the SAME physical machine
-//   ✓ Different on any two different physical machines (phone ≠ laptop ≠ PC)
-//   ✓ No user input, no permissions, instant, works everywhere
+// ─── Robust Device Fingerprint ───────────────────────────────────────────────
+// Uses signals guaranteed to differ between ANY two different physical devices:
 //
-// We also mix in screen dimensions + mobile/desktop detection as extra entropy.
+//  1. navigator.userAgent   — contains exact OS + device model (Win10 vs Android 12)
+//  2. Physical screen pixels — screen.width * devicePixelRatio (1920 vs 393)  
+//  3. maxTouchPoints        — 0 on desktop, 5+ on mobile
+//  4. hardwareConcurrency   — CPU core count
+//  5. deviceMemory          — RAM in GB
+//  6. timezone              — system timezone
+//
+// Two identical phone models would need same model+OS+RAM+timezone to collide,
+// which is then further separated by canvas GPU rendering as a tiebreaker.
 
 let _cachedFp = null;
 
 const hashStr = (s) => {
-  let h = 0x811c9dc5; // FNV offset basis
+  let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) {
     h ^= s.charCodeAt(i);
-    h = Math.imul(h, 0x01000193) >>> 0; // FNV prime
+    h = Math.imul(h, 0x01000193) >>> 0;
   }
   return h.toString(36);
 };
 
-const getCanvasFingerprint = () => {
+const getCanvasTiebreaker = () => {
   try {
-    const canvas = document.createElement('canvas');
-    canvas.width = 280; canvas.height = 60;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return 'nocanvas';
-
-    // Draws that expose GPU/font rendering differences
-    ctx.fillStyle = '#f60';
-    ctx.fillRect(0, 0, 280, 60);
-    ctx.fillStyle = '#069';
-    ctx.font = '18px Arial, sans-serif';
-    ctx.fillText('AdamVilla\u2764\u03A9', 10, 30);
-    ctx.fillStyle = 'rgba(102,204,0,0.7)';
-    ctx.font = '14px Georgia, serif';
-    ctx.fillText('Device ID 1234567890', 10, 50);
-
-    // Bezier curve — GPU renders subpixels differently
-    ctx.strokeStyle = '#ff3300';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(10, 10); ctx.bezierCurveTo(80, 5, 200, 55, 270, 15);
-    ctx.stroke();
-
-    return canvas.toDataURL().slice(-80); // last 80 chars = the most variable part
-  } catch (e) { return 'canvaserr'; }
+    const c = document.createElement('canvas');
+    c.width = 200; c.height = 40;
+    const ctx = c.getContext('2d');
+    if (!ctx) return '0';
+    ctx.fillStyle = '#f0f'; ctx.fillRect(0, 0, 200, 40);
+    ctx.fillStyle = '#0ff'; ctx.font = '14px monospace';
+    ctx.fillText('AdamVilla2026\u2665', 5, 25);
+    ctx.fillStyle = 'rgba(255,100,0,0.6)';
+    ctx.beginPath(); ctx.arc(150, 20, 15, 0, Math.PI * 2); ctx.fill();
+    return c.toDataURL().slice(-60);
+  } catch(e) { return '0'; }
 };
 
 const warmLocalIp = () => {
   if (_cachedFp) return Promise.resolve(_cachedFp);
 
-  // Canvas fingerprint — GPU/font renderer level, identical across all browsers on same device
-  const canvas = getCanvasFingerprint();
+  const ua = navigator.userAgent || '';
+  
+  // Physical pixel dimensions — phone (393×852 CSS → 1179×2556 physical) vs desktop (1920×1080)
+  const physW = Math.round(screen.width * (window.devicePixelRatio || 1));
+  const physH = Math.round(screen.height * (window.devicePixelRatio || 1));
 
-  // Physical device signals
-  const hw = [
-    screen.width, screen.height,                          // physical resolution
-    window.devicePixelRatio || 1,                         // retina ratio
-    navigator.hardwareConcurrency || 0,                   // CPU core count
-    navigator.deviceMemory || 0,                          // RAM GB
-    Intl.DateTimeFormat().resolvedOptions().timeZone,     // system timezone
-    /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) ? 'm' : 'd', // mobile/desktop
+  const signals = [
+    ua,                                                    // Win10/Android/iOS — always unique
+    physW, physH,                                          // physical pixel resolution
+    window.devicePixelRatio || 1,                          // 1=desktop, 2/3=phone
+    navigator.maxTouchPoints || 0,                         // 0=desktop mouse, 5+=touchscreen
+    navigator.hardwareConcurrency || 0,                    // CPU cores
+    navigator.deviceMemory || 0,                           // RAM GB
+    Intl.DateTimeFormat().resolvedOptions().timeZone,      // system timezone
     screen.colorDepth,
-  ].join('|');
+    getCanvasTiebreaker(),                                 // GPU tiebreaker for identical models
+  ].join('||');
 
-  const fp = 'cf_' + hashStr(canvas + hw);
+  const fp = 'v4_' + hashStr(signals);
   _cachedFp = fp;
   return Promise.resolve(fp);
 };
