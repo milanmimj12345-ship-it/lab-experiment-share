@@ -8,66 +8,76 @@ import {
 } from 'lucide-react';
 import { isImage, PreviewModal } from './PreviewModal';
 
-// ─── Get local network IP via WebRTC ─────────────────────────────────────────
-// WebRTC exposes the device's LAN IP (e.g. 192.168.1.105).
-// This is assigned by the router — same on ALL browsers on the same machine,
-// different for every physical device on the network. No user input needed.
-let _cachedLocalIp = null;
+// ─── Composite Device Fingerprint ────────────────────────────────────────────
+// Combines WebRTC local IP (same across browsers on one machine) with
+// hardware signals (screen size, platform, cores) that differ between
+// phone vs desktop even when WebRTC fails on mobile.
+//
+// Same device, any browser  → identical fingerprint ✓
+// Phone vs desktop          → different screen/platform → different fingerprint ✓
+// Two laptops on same WiFi  → different WebRTC IP → different fingerprint ✓
 
-const getLocalIp = () => {
-  if (_cachedLocalIp) return Promise.resolve(_cachedLocalIp);
+let _cachedFp = null;
 
-  return new Promise((resolve) => {
-    try {
-      const pc = new RTCPeerConnection({ iceServers: [] });
-      const ips = new Set();
-      pc.createDataChannel('');
-      pc.createOffer()
-        .then(offer => pc.setLocalDescription(offer))
-        .catch(() => resolve('unknown'));
+const getWebRtcIp = () => new Promise((resolve) => {
+  try {
+    const pc = new RTCPeerConnection({ iceServers: [] });
+    const ips = new Set();
+    pc.createDataChannel('');
+    pc.createOffer()
+      .then(o => pc.setLocalDescription(o))
+      .catch(() => resolve(''));
 
-      pc.onicecandidate = (event) => {
-        if (!event || !event.candidate) {
-          // ICE gathering complete
-          pc.close();
-          if (ips.size > 0) {
-            // Prefer private LAN IP over loopback
-            const lan = [...ips].find(ip =>
-              ip.startsWith('192.168.') ||
-              ip.startsWith('10.') ||
-              ip.startsWith('172.')
-            );
-            const result = lan || [...ips][0];
-            _cachedLocalIp = result;
-            resolve(result);
-          } else {
-            resolve('unknown');
-          }
-          return;
-        }
-        const candidate = event.candidate.candidate;
-        const match = candidate.match(/(\d{1,3}\.){3}\d{1,3}/);
-        if (match) ips.add(match[0]);
-      };
-
-      // Fallback timeout
-      setTimeout(() => {
+    pc.onicecandidate = (evt) => {
+      if (!evt || !evt.candidate) {
         pc.close();
-        const result = _cachedLocalIp || [...(new Set())][0] || 'unknown';
-        resolve(result);
-      }, 2500);
+        const lan = [...ips].find(ip =>
+          ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.')
+        );
+        resolve(lan || [...ips][0] || '');
+        return;
+      }
+      const m = evt.candidate.candidate.match(/(\d{1,3}\.){3}\d{1,3}/);
+      if (m) ips.add(m[0]);
+    };
+    setTimeout(() => { try { pc.close(); } catch(e){} resolve([...ips][0] || ''); }, 1800);
+  } catch (e) { resolve(''); }
+});
 
-    } catch (e) {
-      resolve('unknown');
-    }
-  });
+// Simple string hash
+const hashStr = (s) => {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) { h = Math.imul(31, h) + s.charCodeAt(i) | 0; }
+  return Math.abs(h).toString(36);
 };
 
-// Pre-warm: start resolving immediately on page load so it's ready by upload time
-let _localIpPromise = null;
-const warmLocalIp = () => {
-  if (!_localIpPromise) _localIpPromise = getLocalIp();
-  return _localIpPromise;
+const warmLocalIp = async () => {
+  if (_cachedFp) return _cachedFp;
+
+  // 1. Try WebRTC local IP (works on desktop browsers, often blocked on mobile)
+  const rtcIp = await getWebRtcIp();
+
+  // 2. Hardware/display signals — these are PHYSICAL device properties,
+  //    identical across all browsers on the same machine
+  const hw = [
+    screen.width,                                        // physical screen px
+    screen.height,
+    screen.colorDepth,
+    window.devicePixelRatio || 1,                        // retina vs non-retina
+    navigator.hardwareConcurrency || 0,                  // CPU cores
+    navigator.deviceMemory || 0,                         // RAM (GB)
+    navigator.platform || '',                            // Win32, iPhone, Linux armv8, etc.
+    /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
+    Intl.DateTimeFormat().resolvedOptions().timeZone,    // system timezone
+  ].join('|');
+
+  // 3. Combine: if WebRTC succeeded, use it as the primary key (most unique).
+  //    Append hardware hash so two devices with same IP still differ.
+  const hwHash = hashStr(hw);
+  const fp = rtcIp ? `${rtcIp}_${hwHash}` : `nortc_${hwHash}`;
+
+  _cachedFp = fp;
+  return fp;
 };
 
 // ─── Color palette ─────────────────────────────────────────────────────────────
@@ -261,10 +271,7 @@ const DeviceSection = ({ localIpKey, userNumber, colorScheme, deviceFiles, myLoc
   const folderNames = Object.keys(folderMap);
   const totalItems = rootFiles.length + folderNames.length;
 
-  // Display: show last octet of IP as device label so it's meaningful but not too technical
-  const shortLabel = localIpKey.startsWith('192.168.') || localIpKey.startsWith('10.') || localIpKey.startsWith('172.')
-    ? `Device ${localIpKey.split('.').pop()}`
-    : `Device ${userNumber}`;
+  const shortLabel = `Device ${userNumber}`;
 
   return (
     <div style={{ border: `1px solid ${colorScheme.border}`, borderRadius: '18px', overflow: 'hidden', background: colorScheme.bg, marginBottom: '10px' }}>
