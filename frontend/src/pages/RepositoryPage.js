@@ -20,15 +20,36 @@ import { isImage, PreviewModal } from './PreviewModal';
 // For school lab use (students pick one browser), this is perfectly fine.
 
 const warmLocalIp = () => {
-  let id = localStorage.getItem('av_uid');
-  if (!id) {
-    id = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-      const r = Math.random() * 16 | 0;
-      return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
-    });
-    localStorage.setItem('av_uid', id);
-  }
-  return Promise.resolve(id);
+  // Use ONLY hardware/OS-level signals — these are identical across
+  // Chrome, Firefox, Edge, Safari on the SAME physical machine,
+  // but different between any two different physical devices.
+  //
+  // Key insight: navigator.platform = "Win32" / "Linux armv8l" / "iPhone"
+  // This is OS-level, NOT browser-level — same on all browsers on same device.
+  // We deliberately EXCLUDE navigator.userAgent (contains browser name/version).
+
+  const hashStr = (s) => {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return h.toString(36);
+  };
+
+  const signals = [
+    navigator.platform || '',                              // "Win32", "Linux armv8l", "iPhone" — OS level, same across all browsers
+    screen.width,                                          // physical screen width
+    screen.height,                                         // physical screen height  
+    Math.round((window.devicePixelRatio || 1) * 10),      // pixel density (retina vs not)
+    navigator.hardwareConcurrency || 0,                    // CPU core count
+    navigator.deviceMemory || 0,                           // RAM in GB
+    navigator.maxTouchPoints || 0,                         // 0=desktop, 5=phone/tablet
+    Intl.DateTimeFormat().resolvedOptions().timeZone,      // system timezone
+    screen.colorDepth,                                     // display color depth
+  ].join('|');
+
+  return Promise.resolve('hw_' + hashStr(signals));
 };
 
 // DEBUG badge — shows first 8 chars of this device's UUID in bottom corner
@@ -37,7 +58,7 @@ const DeviceDebugBadge = () => {
   useEffect(() => { warmLocalIp().then(id => setUid(id.slice(0, 8))); }, []);
   return (
     <div style={{ position: 'fixed', bottom: 12, right: 12, zIndex: 9999, background: '#0a0a0a', border: '1px solid #333', borderRadius: 8, padding: '4px 10px', fontSize: 10, color: '#ff6b00', fontFamily: 'monospace', letterSpacing: 1 }}>
-      DEV-ID: {uid}
+      HW-ID: {uid}
     </div>
   );
 };
