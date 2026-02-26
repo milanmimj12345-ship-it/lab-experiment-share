@@ -144,6 +144,47 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
 
 
+
+// Swami Bot — receives base64 images directly, sends to Groq vision API
+app.post('/api/swami-analyze', async (req, res) => {
+  try {
+    const { images, prompt } = req.body;
+    if (!images || images.length === 0) return res.status(400).json({ error: 'No images provided' });
+
+    const GROQ_API_KEY = process.env.GROQ_API_KEY;
+    if (!GROQ_API_KEY) return res.status(500).json({ error: 'GROQ_API_KEY not configured' });
+
+    // Build message with all images
+    const userContent = [];
+    images.forEach((img, idx) => {
+      userContent.push({
+        type: 'image_url',
+        image_url: { url: `data:${img.mimeType};base64,${img.base64}` }
+      });
+      userContent.push({ type: 'text', text: `[Image ${idx + 1}: ${img.name}]` });
+    });
+    userContent.push({ type: 'text', text: prompt });
+
+    const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+        messages: [{ role: 'user', content: userContent }],
+        max_tokens: 4096,
+        temperature: 0.1
+      })
+    });
+
+    const data = await groqRes.json();
+    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+    res.json({ success: true, text: data?.choices?.[0]?.message?.content || 'No content.' });
+  } catch (err) {
+    console.error('Swami analyze error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Folder AI — fetches multiple images and sends to Groq vision API
 // Called by FolderAIPreviewModal in frontend (avoids CORS)
 app.post('/api/folder-ai', async (req, res) => {
