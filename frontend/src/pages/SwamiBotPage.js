@@ -120,13 +120,13 @@ export default function SwamiBotPage({ navigate }) {
       <div style={{position:'fixed',inset:0,zIndex:0}}>
         {/* swami image — full cover */}
         <img src="/swami.png" alt=""
-          style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',objectPosition:'center top',
+          style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',objectPosition:'center 15%',
             opacity:0.88,
-            maskImage:'linear-gradient(to bottom,rgba(0,0,0,1) 0%,rgba(0,0,0,0.95) 30%,rgba(0,0,0,0.55) 55%,rgba(0,0,0,0.1) 72%,transparent 82%)',
-            WebkitMaskImage:'linear-gradient(to bottom,rgba(0,0,0,1) 0%,rgba(0,0,0,0.95) 30%,rgba(0,0,0,0.55) 55%,rgba(0,0,0,0.1) 72%,transparent 82%)'}}
+            maskImage:'linear-gradient(to bottom,rgba(0,0,0,1) 0%,rgba(0,0,0,1) 45%,rgba(0,0,0,0.7) 62%,rgba(0,0,0,0.15) 78%,transparent 88%)',
+            WebkitMaskImage:'linear-gradient(to bottom,rgba(0,0,0,1) 0%,rgba(0,0,0,1) 45%,rgba(0,0,0,0.7) 62%,rgba(0,0,0,0.15) 78%,transparent 88%)'}}
           onError={e=>e.target.style.display='none'}/>
         {/* gradient: sides dark, bottom dark */}
-        <div style={{position:'absolute',inset:0,background:'linear-gradient(to bottom,transparent 0%,transparent 50%,rgba(3,2,10,0.75) 65%,#03020a 80%)'}}/>
+        <div style={{position:'absolute',inset:0,background:'linear-gradient(to bottom,transparent 0%,transparent 58%,rgba(3,2,10,0.8) 72%,#03020a 85%)'}}/>
         <div style={{position:'absolute',inset:0,background:'radial-gradient(ellipse 90% 100% at 50% 0%,transparent 50%,rgba(3,2,10,0.3) 100%)'}}/>
         <Stars/>
       </div>
@@ -145,7 +145,7 @@ export default function SwamiBotPage({ navigate }) {
 
         {/* Hero section — full viewport width */}
         <div style={{width:'100%',textAlign:'center',padding:'0 20px',boxSizing:'border-box'}}>
-          <div style={{height:'clamp(240px,30vh,360px)'}}/>
+          <div style={{height:'clamp(320px,46vh,480px)'}}/>
           <h1 style={{margin:'0 0 0',lineHeight:1,letterSpacing:'0.06em',fontFamily:"'Bebas Neue','Arial Black',sans-serif",fontSize:'clamp(44px,7vw,90px)',fontWeight:400,textShadow:'0 4px 40px rgba(0,0,0,0.95),0 1px 8px rgba(0,0,0,0.8)'}}>
             <span style={{color:'#fff'}}>VIGNESHWARA </span><span style={{color:'#ff6b00'}}>SWAMI</span>
           </h1>
