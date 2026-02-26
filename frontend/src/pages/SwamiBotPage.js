@@ -4,6 +4,28 @@ import axios from '../axiosConfig';
 import toast from 'react-hot-toast';
 
 const BACKEND = 'https://lab-experiment-share-production.up.railway.app';
+
+// ── Same hardware fingerprint as RepositoryPage ───────────────────────────────
+const hashStr = (s) => {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return h.toString(36);
+};
+const getDeviceId = () => {
+  const signals = [
+    navigator.platform || '',
+    screen.width, screen.height,
+    Math.round((window.devicePixelRatio || 1) * 10),
+    navigator.hardwareConcurrency || 0,
+    navigator.deviceMemory || 0,
+    navigator.maxTouchPoints || 0,
+    Intl.DateTimeFormat().resolvedOptions().timeZone,
+    screen.colorDepth,
+  ].join('|');
+  return 'hw_' + hashStr(signals);
+};
+
+
 const IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'];
 const isImg = (name) => IMAGE_EXTS.includes((name || '').split('.').pop().toLowerCase());
 
@@ -121,6 +143,7 @@ const AddToExperimentModal = ({ text, onClose }) => {
       fd.append('experimentId', expId);
       fd.append('group', group);
       fd.append('lab', lab);
+      fd.append('deviceId', getDeviceId());
 
       await axios.post('/api/files/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
       toast.success(`Added to ${group} — ${lab}!`);
