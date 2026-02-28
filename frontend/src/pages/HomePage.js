@@ -1,5 +1,5 @@
 import React from 'react';
-import { Share2, MessageSquare, Send, TrendingUp, Shield, ChevronRight, Gamepad2, Sparkles } from 'lucide-react';
+import { Share2, MessageSquare, Send, TrendingUp, Shield, ChevronRight, Gamepad2, Sparkles, Lock } from 'lucide-react';
 
 const NavCard = ({ title, description, icon: Icon, onClick, className = '', accentColor = '#ff6b00', badge }) => (
   <div onClick={onClick} className={`group relative cursor-pointer overflow-hidden p-8 rounded-[2rem] bg-zinc-900/50 border border-white/5 hover:border-white/20 transition-all duration-500 hover:scale-[1.02] shadow-2xl flex flex-col justify-between ${className}`}>
@@ -81,6 +81,15 @@ const HomePage = ({ navigate }) => (
         className="md:col-span-2"
         accentColor="#ff3333"
         badge="NEW"
+      />
+
+      <NavCard
+        title="Admin Panel"
+        description="Restricted. Manage labs, groups, experiments and content."
+        icon={Lock}
+        onClick={() => navigate('admin')}
+        className="md:col-span-2"
+        accentColor="#666"
       />
 
       <NavCard

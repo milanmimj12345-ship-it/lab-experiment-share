@@ -8,6 +8,7 @@ import ChatRoomPage from './pages/ChatRoomPage';
 import DirectSharePage from './pages/DirectSharePage';
 import GamePage from './pages/GamePage';
 import SwamiBotPage from './pages/SwamiBotPage';
+import AdminPage from './pages/AdminPage';
 
 const App = () => {
   const [view, setView] = useState('home');
@@ -75,6 +76,7 @@ const App = () => {
         {view === 'direct_share' && <DirectSharePage navigate={navigate} />}
         {view === 'game' && <GamePage navigate={navigate} />}
         {view === 'swami_bot' && <SwamiBotPage navigate={navigate} />}
+        {view === 'admin' && <AdminPage navigate={navigate} />}
       </main>
 
       {view !== 'chat_room' && view !== 'game' && (

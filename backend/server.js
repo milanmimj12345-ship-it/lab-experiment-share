@@ -145,6 +145,50 @@ server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
 
 
 
+
+// ── Admin Panel endpoints (no JWT — protected by frontend login) ──────────────
+
+// GET all experiments (admin view — all groups/labs)
+app.get('/api/admin-panel/experiments', async (req, res) => {
+  try {
+    const Experiment = require('./models/Experiment');
+    const experiments = await Experiment.find().sort({ lab:1, group:1, experimentNumber:1 });
+    res.json({ success: true, experiments });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+// DELETE all chat messages
+app.delete('/api/admin-panel/chats', async (req, res) => {
+  try {
+    await ChatMessage.deleteMany({});
+    res.json({ success: true, message: 'All chats cleared' });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+// DELETE single chat message
+app.delete('/api/admin-panel/chats/:id', async (req, res) => {
+  try {
+    await ChatMessage.findByIdAndDelete(req.params.id);
+    res.json({ success: true });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+// DELETE a file (with Cloudinary cleanup)
+app.delete('/api/files/:id', async (req, res) => {
+  try {
+    const File = require('./models/File');
+    const file = await File.findById(req.params.id);
+    if (!file) return res.status(404).json({ error: 'File not found' });
+    // Try to delete from Cloudinary
+    const { cloudinary } = require('./config/cloudinary');
+    if (file.publicId) {
+      try { await cloudinary.uploader.destroy(file.publicId); } catch(e) { console.warn('Cloudinary delete failed:', e.message); }
+    }
+    await File.findByIdAndDelete(req.params.id);
+    res.json({ success: true });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
 // Swami Bot — receives base64 images directly, sends to Groq vision API
 app.post('/api/swami-analyze', async (req, res) => {
   try {
